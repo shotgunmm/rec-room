@@ -1,0 +1,32 @@
+.promotions-row {
+	.head {
+		h2 {
+			color: $blue;
+			font-weight: 500;
+
+			@media (min-width: 768px) {
+				font-size: 24px;
+			}
+		}
+	}
+
+	.box {
+		@include imgCover(62.5%);
+
+		.text {
+			border-bottom: 2px solid $orange;
+			border-left: 2px solid $orange;
+			border-right: 2px solid $orange;
+
+			@include overStar($orange, 10px);
+
+			h2 {
+				color: $orange;
+			}
+
+			.cta {
+				transform: translateY(50%);
+			}
+		}
+	}
+}

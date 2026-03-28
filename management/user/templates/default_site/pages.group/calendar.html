@@ -1,0 +1,22 @@
+<div class="select-tag d-flex justify-content-center" id="selectTag">
+	<span class="tag py-2 px-3 active" data-category="all">All</span>
+	{exp:channel:categories style="linear" category_group="1"}
+	<span class="tag py-2 px-3" data-category="{category_url_title}">{category_name}</span>
+	{/exp:channel:categories}
+</div>
+<div class="row post-list justify-content-center" id="postTagContent">
+	{exp:structure:entries channel="calendar" dynamic="no"}
+	<div class="col-md-6 col-lg-3 mt-4 tag-wrap" data-category="{categories category_group='1'}{category_url_title}{/categories}">
+		<div class="box p-3 text-center vstack align-items-center h-100">
+			<div class="text flex-grow-1 mb-3">
+				<div class="head d-flex flex-column-reverse">
+					<h2 class="mb-3">{title}</h2>
+					<p class="date mb-3">{entry_date format='%F %j, %Y'}</p>
+				</div>
+				{description}
+			</div>
+			<a class="cta mt-3" href="{structure:page_uri_for:{entry_id}}">Continue Reading</a>
+		</div>
+	</div>
+	{/exp:structure:entries}
+</div>

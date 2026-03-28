@@ -1,0 +1,24 @@
+form {
+	.form-label,
+	.form-control,
+	.form-select {
+		color: $yellow;
+		font: 500 14px $jos;
+		letter-spacing: 0.06em;
+	}
+
+	.form-control,
+	.form-select {
+		background-color: rgba($blue, 0.5);
+		border: 0 none;
+		border-radius: 10px;
+		color: $white;
+		height: 38px;
+	}
+
+	button {
+		letter-spacing: 0.13em;
+		min-height: 55px;
+		min-width: 205px;
+	}
+}

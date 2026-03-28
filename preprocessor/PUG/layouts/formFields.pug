@@ -1,0 +1,44 @@
+mixin inputField(label, type='text', id=null, col=false, help=false)
+    - const formatCamelCase = str => str.trim().replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase()).replace(/\s+/g, '');
+    - const camelCaseId = formatCamelCase(label);
+    - const finalId = id ? formatCamelCase(id) : camelCaseId;
+
+    .mb-3(class=(col ? `col-md-${col}` : ''))
+        label.form-label(for=finalId) #{label}
+        input.form-control(type=type, id=finalId)
+        if help
+            .form-text=help
+
+mixin inputTextA(label, id=null, col=false, help=false)
+    - const formatCamelCase = str => str.trim().replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase()).replace(/\s+/g, '');
+    - const camelCaseId = formatCamelCase(label);
+    - const finalId = id ? formatCamelCase(id) : camelCaseId;
+
+    .mb-3(class=(col ? `col-md-${col}` : ''))
+        label.form-label(for=finalId) #{label}
+        textarea.form-control(id=finalId, rows='3')
+        if help
+            .form-text=help
+
+mixin inputSelect(label, options = ['Lorem', 'Ispum'], id=null, col=false)
+    - const formatCamelCase = str => str.trim().replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase()).replace(/\s+/g, '');
+    - const camelCaseId = formatCamelCase(label);
+    - const finalId = id ? formatCamelCase(id) : camelCaseId;
+
+    .mb-3(class=(col ? `col-md-${col}` : ''))
+        label.form-label(for=finalId) #{label}
+        select.form-select(type=type, id=finalId)
+            each option, index in options
+                option(select=(index === 0 ? 'selected' : ''))=option
+
+mixin inputCheck(label, id=null, col=false)
+    - const formatCamelCase = str => str.trim().replace(/(?:^\w|[A-Z]|\b\w)/g, (word, index) => index === 0 ? word.toLowerCase() : word.toUpperCase()).replace(/\s+/g, '');
+    - const camelCaseId = formatCamelCase(label);
+    - const finalId = id ? formatCamelCase(id) : camelCaseId;
+
+    .mb-3.mt-3.align-items-center.d-flex(class=(col ? `col-md-${col}` : ''))
+        input.form-check-input.me-2.mt-0(type='checkbox', id=finalId)
+        label.form-check-label(for=finalId) #{label}
+
+mixin buttonForm(text)
+    button.cta.border-0.after-star(href='#') #{text} #[span.star #[img(src='images/yellow-star.svg', alt='', loading='lazy', width='42', height='42')]]

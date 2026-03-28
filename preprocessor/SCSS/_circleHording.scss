@@ -1,0 +1,129 @@
+.circle-hording {
+	background: $yellow;
+	overflow: hidden;
+	padding-block: 100px;
+	position: relative;
+
+	.container {
+		max-width: 1920px;
+		position: relative;
+	}
+
+	.img-hold {
+		position: relative;
+	}
+
+	.circle {
+		background-color: $orange;
+		border-radius: 50%;
+		height: 500px;
+		left: 50%;
+		position: absolute;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: 500px;
+		z-index: 1;
+
+		@media (min-width: 992px) {
+			height: 700px;
+			left: -115px;
+			transform: translate(0, -50%);
+			width: 700px;
+		}
+
+		.border-wrap {
+			border: 2px solid $white;
+			height: 385px;
+			left: 50%;
+			padding-inline: 1.25rem;
+			position: absolute;
+			top: 50%;
+			transform: translate(-50%, -50%);
+			width: 95vw;
+
+			@media (min-width: 600px) {
+				padding-inline: 0 1.25rem;
+				width: 480px;
+			}
+
+			@media (min-width: 992px) {
+				width: 585px;
+			}
+
+			.star {
+				position: absolute;
+				right: 1.25rem;
+				top: -150px;
+
+				@media (min-width: 992px) {
+					top: -40px;
+				}
+			}
+
+			.text {
+				width: 410px;
+
+				.head {
+					max-width: 290px;
+
+					h2 {
+						color: $white;
+						font: 500 24px/1.2 $jos;
+
+						strong {
+							font-weight: 700;
+						}
+					}
+				}
+
+				p,
+				li {
+					color: $white;
+					font: 500 18px $pub;
+					letter-spacing: 0.05em;
+				}
+
+				li {
+					+ li {
+						margin-top: 10px;
+					}
+				}
+			}
+		}
+	}
+
+	&.calender-hording {
+		background: $liteBg;
+
+		@media (max-width: 991px) {
+			padding-bottom: 50px;
+			padding-top: 130px;
+		}
+
+		.circle {
+			@media (max-width: 991px) {
+				height: 560px;
+				top: 200px;
+				width: 560px;
+			}
+
+			.border-wrap {
+				height: 500px;
+
+				@media (min-width: 992px) {
+					height: 480px;
+				}
+			}
+		}
+
+		.calendar-wrap {
+			@media (max-width: 991px) {
+				margin-top: 500px;
+			}
+
+			@media (min-width: 992px) {
+				margin-left: 500px;
+			}
+		}
+	}
+}

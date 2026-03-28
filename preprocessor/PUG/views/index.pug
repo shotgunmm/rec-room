@@ -1,0 +1,67 @@
+- let siteBranch = 'REC ROOM';
+- let pageName = 'Home';
+- let subPage = '';
+- let pageTitle = pageName + ' | ' + siteBranch
+
+include ../partials/head.pug
+include ../partials/header.pug
+include ../layouts/placesRow.pug
+include ../layouts/signUp.pug
+include ../partials/footer.pug
+
+doctype html
+html(lang='en')
+    +head(pageTitle)
+
+    body.loading
+        +header()
+
+        section.hero.hero-home
+            .container-fluid.gx-0
+                .row.gx-0
+                    .col-md-8
+                        .hero-slider
+                            img.img-fluid(src='images/hero-slider1.jpg', alt='')
+                    .col-md-4.legend.p-4.p-lg-5.text-uppercase
+                        p.month.mb-1 MARCH
+                        p.punch.mb-0 #[strong.d-block LIVE BAND] SCHEDULE
+                        p.day (SATURDAYS)
+                        .day-event
+                            mixin day(num, name)
+                                .on-day.d-flex.align-items-center
+                                    .num.d-flex.align-items-center.justify-content-center=num
+                                    .name=name
+                            - let date = {'Naked Bull':2, 'The Pitfalls':9, 'Wut It Iz':16, 'THE CASTAWAYS':23, 'Target Practice':30}
+                            each onDate, eventName in date
+                                +day(onDate, eventName)
+                        a.more.d-inline-flex.text-decoration-none(href='#') LEARN MORE #[i.bi.bi-chevron-right]
+
+        section.place-to-meet.py-5
+            .container.narrow
+                .head.text-center
+                    h2.text-uppercase.mb-0 #[strong.text-orange A PLACE TO MEET] WITH FRIENDS
+                +placesRow('Drinks', 'Food', 'Games', 'Entertainment')
+
+        section.event-book
+            .img-frame
+                img(src='images/event-book-bg.jpg', alt='', loading='lazy')
+            .over.text-uppercase.text-center
+                h2.text-uppercase PRIVATE EVENTS
+                a.cta.after-star(href='#') BOOK NOW #[span.star #[img(src='images/yellow-star.svg', alt='', loading='lazy', width='42', height='42')]]
+
+        section.circle-hording
+            .container.gx-0
+                .circle
+                    .border-wrap.d-flex.align-items-center.justify-content-center.justify-content-md-end
+                        .star
+                            img(src='images/logo-stars.svg', alt='', width='110', height='198')
+                        .text
+                            .head.mb-3
+                                h2 #[strong Rec Room] presents a new way to eat, drink & play!
+                            p As host to arcade classics, bar/yard games, casual eats and professionally crafted cocktails, we’re breaking the kid out of every adult. Join us in our 6,000 sq ft of indoor outdoor eatertainment bar and grill, NOW OPEN!
+
+                .img-hold.text-end
+                    img(src='images/present-img.jpg', alt='', loading='lazy')
+        +signUp()
+
+        +footer()

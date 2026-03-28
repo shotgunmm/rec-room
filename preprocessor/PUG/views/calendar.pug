@@ -1,0 +1,82 @@
+- let siteBranch = 'REC ROOM';
+- let pageName = 'Calendar';
+- let subPage = '';
+- let pageTitle = pageName + ' | ' + siteBranch
+
+include ../partials/head.pug
+include ../partials/header.pug
+include ../layouts/pageTitle.pug
+include ../layouts/innerHero.pug
+include ../layouts/placesRow.pug
+include ../partials/footer.pug
+
+doctype html
+html(lang='en')
+    +head(pageTitle)
+
+    body.loading
+        +header()
+
+        +pageTitle()
+
+        section.circle-hording.calender-hording
+            .container.gx-0.d-flex.justify-content-center(style='max-width:1520px')
+                .circle
+                    .border-wrap.d-flex.align-items-center.justify-content-center.justify-content-md-end
+                        .star
+                            img(src='images/logo-stars.svg', alt='', width='110', height='198')
+                        .text
+                            .head.mb-3
+                                h2 Check out #[strong.text-uppercase The Rec Room's] calendar for exciting weekly events:
+                            ul
+                                li #[strong Thursday: Open Mic Night] - Showcase your talent or enjoy local performers.
+                                li #[strong Friday: Karaoke] - Sing your favorite songs or support friends.
+                                li #[strong Saturday]: Live Bands - Enjoy live music from various talented bands.
+                            p Whether you're looking to perform, cheer on your friends, or just enjoy a great night out, The Rec Room has you covered. 
+
+                .calendar-wrap
+                    #calendar.calendar
+                    .meta-calendar.text-center.mt-3
+                        p Days in red have events or entertainment.#[br] Click on a day to jump to it.
+
+        +innerHero(true)
+
+        section.month-events
+            .container
+                .nav-months.justify-content-between.mb-4.d-none.d-md-flex
+                    .month.prev.disabled.flex-grow-1 #[i.bi.bi-chevron-left] See January
+                    .month.current.flex-grow-1.text-center February
+                    .month.next.flex-grow-1.text-end See March #[i.bi.bi-chevron-right]
+                .heading.mb-5
+                    h2.text-uppercase.mb-0 #[strong REC ROOM] SCHEDULE
+
+                mixin event(date, title, time, admission, aboutText, websiteUrl, isClicked=false)
+                    - let eventDate = new Date(date);
+                    - let day = eventDate.getDate();
+                    - let month = eventDate.toLocaleString('default', { month: 'long' });
+                    - let weekday = eventDate.toLocaleString('default', { weekday: 'long' });
+                    - let formattedDate = `${weekday}, ${month} ${day}th`;
+                    .event-collapse(class=(isClicked ? 'clicked' : ''))
+                        .event-head.d-flex
+                            .date.d-flex.justify-content-center.align-items-center=day
+                            .d-flex.flex-column.flex-md-row.justify-content-between.align-items-md-center.flex-grow-1
+                                .copy
+                                    h2=title
+                                    p=`${formattedDate}, ${time}`
+                                    p=admission
+                                .more.d-flex.align-items-center.mt-3.mt-md-0
+                                    | Learn More
+                                    span.icon.ms-1= isClicked ? '-' : '+'
+                        .event-content(style=(isClicked ? 'display:block' : ''))
+                            .text
+                                h2 About
+                                p=aboutText
+                                h2 Website
+                                p #[a(href=websiteUrl)] example.com
+
+                +event('2025-02-12', 'Event Title', '9pm - 10pm', 'Free Admission', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.', '#', true)
+                +event('2025-02-15', 'Event Title', '9pm - 10pm', '$10 at the Door', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.', '#')
+                +event('2025-02-20', 'Event Title', '9pm - 10pm', 'Ticket Required', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.', '#')
+                +event('2025-02-25', 'Event Title', '9pm - 10pm', 'Ticket Required', 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.', '#')
+
+        +footer()

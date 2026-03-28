@@ -1,0 +1,262 @@
+{head}
+{navigation}
+
+{exp:channel:entries channel="home"}
+
+{!-- HERO SECTION with Band Schedule Sidebar --}
+<section class="hero hero-home">
+	<div class="container-fluid gx-0">
+		<div class="row gx-0">
+			{banner_image}
+			<div class="col-md-8">
+				<div class="hero-slider">
+					{banner_image:image}
+					<img class="img-fluid" src="{url}" alt="{description}" />
+					{/banner_image:image}
+				</div>
+			</div>
+			{/banner_image}
+			<div class="col-md-4 legend p-4 p-lg-5 text-uppercase">
+				<p class="month mb-1">MARCH</p>
+				<p class="punch mb-0"><strong class="d-block">LIVE BAND</strong> SCHEDULE</p>
+				<p class="day">(SATURDAYS)</p>
+				<div class="day-event">
+					<div class="on-day d-flex align-items-center">
+						<div class="num d-flex align-items-center justify-content-center">2</div>
+						<div class="name">Naked Bull</div>
+					</div>
+					<div class="on-day d-flex align-items-center">
+						<div class="num d-flex align-items-center justify-content-center">9</div>
+						<div class="name">The Pitfalls</div>
+					</div>
+					<div class="on-day d-flex align-items-center">
+						<div class="num d-flex align-items-center justify-content-center">16</div>
+						<div class="name">Wut It Iz</div>
+					</div>
+					<div class="on-day d-flex align-items-center">
+						<div class="num d-flex align-items-center justify-content-center">23</div>
+						<div class="name">THE CASTAWAYS</div>
+					</div>
+					<div class="on-day d-flex align-items-center">
+						<div class="num d-flex align-items-center justify-content-center">30</div>
+						<div class="name">Target Practice</div>
+					</div>
+				</div>
+				<a class="more d-inline-flex text-decoration-none" href="#">LEARN MORE <i class="bi bi-chevron-right"></i></a>
+			</div>
+		</div>
+	</div>
+</section>
+
+{!-- PAGE CONTENT (Fluid Field Blocks) --}
+{page_content}
+{page_content:header_orange_blue}
+<section class="place-to-meet pt-5">
+	<div class="container narrow">
+		{content}
+		<div class="head text-center">
+			<h2 class="text-uppercase mb-0">
+				{if content:orange_text}
+				<strong class="text-orange">{content:orange_text}</strong>
+				{/if}
+				{content:blue_text}
+			</h2>
+		</div>
+		{/content}
+	</div>
+</section>
+{/page_content:header_orange_blue}
+
+{!-- "A Place to Meet" Image/Text Cards --}
+{page_content:image_text}
+<section class="place-to-meet pb-5">
+	<div class="container narrow">
+		<div class="row places-row">
+			{content}
+			<div class="col-md-6 col-lg-3 mt-4">
+				<div class="box">
+					{if content:image}
+					<div class="img">
+						{content:image}
+						<img src="{url}" alt="{title}" loading="lazy" />
+						{/content:image}
+					</div>
+					{/if}
+					<div class="over text-center pb-4">
+						<div class="star d-flex justify-content-center">
+							<div class="icon"><img src="/images/star-white.png" alt="" loading="lazy" /></div>
+						</div>
+						{if content:text}
+						<div class="text text-uppercase">{content:text}</div>
+						{/if}
+					</div>
+				</div>
+			</div>
+			{/content}
+		</div>
+	</div>
+</section>
+{/page_content:image_text}
+
+{page_content:image_text_button}
+<section class="event-book">
+	{content}
+	{content:image}
+	<div class="img-frame">
+		<img src="{url}" alt="{title}" loading="lazy" />
+	</div>
+	{/content:image}
+	<div class="over text-uppercase text-center">
+		{if content:text}
+		<h2 class="text-uppercase">{content:text}</h2>
+		{/if}
+		{if content:button_text && content:button_link}
+		<a class="cta after-star" href="{content:button_link}">
+			{content:button_text} <span class="star"><img src="/images/yellow-star.svg" alt="" loading="lazy" width="42" height="42" /></span>
+		</a>
+		{/if}
+	</div>
+	{/content}
+</section>
+{/page_content:image_text_button}
+
+{!-- "A Place to Meet" Cards Section --}
+{page_content:links_section}
+<section class="place-to-meet py-5">
+	<div class="container narrow">
+		{fields}
+		{page_content:header}
+		{if content}
+		<div class="head text-center">
+			<h2 class="text-uppercase mb-0">{content}</h2>
+		</div>
+		{/if}
+		{/page_content:header}
+		{page_content:button_links_head_desc}
+		<div class="row places-row">
+			{content}
+			<div class="col-md-6 col-lg-3 mt-4">
+				<div class="box">
+					{if content:card_image}
+					<div class="img">
+						{content:card_image}
+						<img src="{url}" alt="{title}" loading="lazy" />
+						{/content:card_image}
+					</div>
+					{/if}
+					<div class="over text-center pb-4">
+						<div class="star d-flex justify-content-center">
+							<div class="icon"><img src="/images/star-white.png" alt="" loading="lazy" /></div>
+						</div>
+						{if content:header}
+						<div class="text text-uppercase">{content:header}</div>
+						{/if}
+					</div>
+				</div>
+			</div>
+			{/content}
+		</div>
+		{/page_content:button_links_head_desc}
+		{/fields}
+	</div>
+</section>
+{/page_content:links_section}
+
+{!-- Private Events Banner --}
+{page_content:header_image_description_button}
+{content}
+<section class="event-book">
+	{content:image}
+	<div class="img-frame"><img src="{url}" alt="{title}" loading="lazy" /></div>
+	{/content:image}
+	<div class="over text-uppercase text-center">
+		{if content:header}
+		<h2 class="text-uppercase">{content:header}</h2>
+		{/if}
+		{if content:button_text && content:button_link}
+		<a class="cta after-star" href="{content:button_link}">{content:button_text} <span class="star"><img src="/images/yellow-star.svg" alt="" loading="lazy" width="42" height="42" /></span></a>
+		{/if}
+	</div>
+</section>
+{/content}
+{/page_content:header_image_description_button}
+
+{!-- Circle Hording Section --}
+{page_content:header_description_image}
+<section class="circle-hording">
+	<div class="container gx-0">
+		<div class="circle">
+			<div class="border-wrap d-flex align-items-center justify-content-center justify-content-md-end">
+				<div class="star"><img src="/images/logo-stars.svg" alt="" width="110" height="198" /></div>
+				<div class="text">
+					{content}
+					{if content:header}
+					<div class="head mb-3">
+						<h2{if content:header_color} class="header-{content:header_color}"{/if}>{content:header}</h2>
+					</div>
+					{/if}
+					{content:description}
+					{/content}
+				</div>
+			</div>
+		</div>
+		<div class="img-hold text-end">
+			{content}
+			{content:image}
+			<img src="{url}" alt="{title}" loading="lazy" />
+			{/content:image}
+			{/content}
+		</div>
+	</div>
+</section>
+{/page_content:header_description_image}
+
+{!-- Sign-Up Section --}
+{page_content:mailing_list_sign_up}
+<section class="sign-up">
+	<div class="container narrow">
+		{content}
+		<div class="row">
+			<div class="col-md-6">
+				<div class="copy">
+					{if content:header}
+					<h2{if content:header_color} class="header-{content:header_color}"{/if}>
+						{content:header}
+					</h2>
+					{/if}
+					{content:description}
+				</div>
+			</div>
+			<div class="col-md-6 mt-4 mt-md-0">
+				<form class="sign-up-form" action="">
+					<div class="mb-3">
+						<label class="form-label" for="name">Name</label>
+						<input class="form-control" type="text" id="name" />
+					</div>
+					<div class="mb-3">
+						<label class="form-label" for="email">Email</label>
+						<input class="form-control" type="email" id="email" />
+					</div>
+				</form>
+			</div>
+			<div class="col-12 text-center mt-4">
+				<button class="cta border-0 after-star" href="#">
+					{content:button_text} <span class="star"><img src="/images/yellow-star.svg" alt="" loading="lazy" width="42" height="42" /></span>
+				</button>
+			</div>
+		</div>
+		{/content}
+	</div>
+</section>
+{/page_content:mailing_list_sign_up}
+
+{!-- Spacer (keep for flexibility) --}
+{page_content:spacer}
+<div style="height: {content}px;"></div>
+{/page_content:spacer}
+
+{/page_content}
+
+{/exp:channel:entries}
+
+{footer}

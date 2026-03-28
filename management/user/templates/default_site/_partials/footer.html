@@ -1,0 +1,72 @@
+	<footer class="footer" id="footer">
+		<div class="footer-site">
+			<div class="container-fluid gx-md-0">
+				<div class="row gx-md-0">
+					<div class="col-md-4 col-lg-3 p-4 p-xl-5 bg-yellow text-center">
+						<div class="logo">
+							<a href="/"><img class="img-fluid" src="/images/footer-logo.png" alt="Rec Room" /></a>
+						</div>
+					</div>
+					<div class="col-md p-4 p-xl-5">
+						<div class="row gx-md-0">
+							<div class="col-lg-5 col-xl-4 pe-md-4 pt-5 pt-md-0">
+								<div class="copy mb-lg-0 mb-5">
+									<h2>REC ROOM</h2>
+									<ul class="list-unstyled column-2">
+										{exp:structure:nav_basic show_depth="1"}
+										<li><a href="{root:page_url}" class="text-uppercase">{root:title}</a></li>
+										{/exp:structure:nav_basic}
+									</ul>
+								</div>
+								<h3>
+									FUEL ESPRESSO & BAGEL CO.<br />
+									STARLAND
+								</h3>
+							</div>
+							<div class="col-md ps-lg-4 pb-5 pb-md-0 mt-4 mt-lg-0 d-flex justify-content-between bod-left">
+								<div class="copy">
+									<h2>(781) 996-3054</h2>
+									<p class="text-orange">Hours:</p>
+									<p>
+										Mon - Fri: 4p-12a<br />
+										Sat: 12p-12a<br />
+										Sun: 12p-8p
+									</p>
+									<p class="fst-italic">
+										Thurs - Sat:<br />
+										Bar Area 21+ after 7pm
+									</p>
+								</div>
+								<div class="logo-star"><img src="/images/footer-star-logo.svg" alt="" /></div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="footer-social text-center py-4 py-md-5">
+			<div class="social">
+				<ul class="nav justify-content-center">
+					<li class="mx-3 mb-4">
+						<a href="{social-facebook-link}" target="_blank"><i class="bi bi-facebook"></i></a>
+					</li>
+					<li class="mx-3 mb-4">
+						<a href="{social-instagram-link}" target="_blank"><i class="bi bi-instagram"></i></a>
+					</li>
+					<li class="mx-3 mb-4">
+						<a href="mailto:info@recroomhanover.com"><i class="bi bi-envelope"></i></a>
+					</li>
+				</ul>
+			</div>
+			<div class="copyright">
+				<p>&copy;{current_time format="%Y"} Starland. All Rights Reserved</p>
+			</div>
+		</div>
+	</footer>
+	<script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+	{exp:channel:entries channel="home|pages"}{page_content}{page_content:calendar}
+	<script src="/js/calendar.js"></script>
+	{/page_content:calendar}{/page_content}{/exp:channel:entries}
+	<script src="/js/app.js"></script>
+  </body>
+</html>

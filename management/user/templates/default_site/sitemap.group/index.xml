@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd"
+>
+
+{!-- HOMEPAGE --}
+{exp:channel:entries channel="home" dynamic="no" status="open" orderby="entry_date" limit="1" sort="desc" disable="member_data|pagination|categories|custom_fields|relationships"}
+<url>
+  <loc>{site_url}</loc>
+  <lastmod>{edit_date format='%Y-%m-%dT%H:%i:%s-05:00'}</lastmod>
+  <changefreq>daily</changefreq>
+  <priority>0.9</priority>
+</url>
+{/exp:channel:entries}
+
+{!-- PAGES --}
+{exp:channel:entries channel="pages" dynamic="no" status="open" orderby="edit_date" sort="desc" disable="member_data|pagination|categories|custom_fields|relationships"}
+<url>
+  <loc>{page_url}/</loc>
+  <lastmod>{edit_date format='%Y-%m-%dT%H:%i:%s-05:00'}</lastmod>
+  <changefreq>daily</changefreq>
+  <priority>0.8</priority>
+</url>
+{/exp:channel:entries}
+
+</urlset>

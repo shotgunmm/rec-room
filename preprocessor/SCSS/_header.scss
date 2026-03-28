@@ -1,0 +1,100 @@
+.header {
+	border-bottom: 0.5rem solid $orange;
+
+	@media (max-width: 767px) {
+		position: relative;
+		z-index: 1000;
+	}
+
+	@media (max-width: 1024px) {
+		.container {
+			padding-inline: 1rem;
+		}
+	}
+
+	.sites_nav {
+		background: $navy;
+		padding-inline: 6.25rem;
+
+		li {
+			height: 60px;
+			position: relative;
+
+			&.active {
+				background: $white;
+			}
+
+			&:before {
+				background: $white;
+				content: '';
+				height: 26px;
+				opacity: 0.5;
+				position: absolute;
+				right: 100%;
+				top: 50%;
+				transform: translateY(-50%);
+				width: 1px;
+			}
+		}
+	}
+
+	.site_nav {
+		li {
+			color: $orange;
+			font: 600 14px/1.8 $jos;
+			// letter-spacing: 0.13em;
+
+			a {
+				&.active {
+					color: $navy;
+					font-weight: 700;
+				}
+			}
+		}
+
+		a:not(.cta) {
+			color: inherit;
+			display: block;
+			text-decoration: none;
+
+			&:hover {
+				color: $navy;
+			}
+		}
+
+		.cta {
+			font-size: 16px;
+
+			&:hover {
+				background: $navy;
+			}
+		}
+
+		&.open {
+			background: $white;
+			left: 0;
+			padding-bottom: 0.5rem;
+			position: absolute;
+			top: calc(100% + 0.5rem);
+			width: 100%;
+
+			li {
+				padding-block: 0.5rem;
+			}
+		}
+	}
+
+	.call_nav {
+		.line {
+			background: $orange;
+			border-radius: 4px;
+			display: block;
+			height: 4px;
+			width: 24px;
+
+			+ .line {
+				margin-top: 4px;
+			}
+		}
+	}
+}

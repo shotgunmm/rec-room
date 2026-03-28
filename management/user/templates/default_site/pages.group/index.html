@@ -1,0 +1,704 @@
+{head}
+{navigation}
+
+{exp:channel:entries channel="pages"}
+
+<section class="page-title text-center text-uppercase">
+  <h1 class="h2 mb-0">{title}</h1>
+</section>
+
+{banner_image}
+<section class="hero-img">
+  {banner_image:image}
+  <img src="{url}" alt="{title}" /></section>
+  {/banner_image:image}
+{/banner_image}
+
+{if entry_id == 18}
+<section class="contact-row pb-5 mb-5">
+  <div class="container narrow">
+    <div class="row">
+      <div class="col-md-5">
+        <h2 class="text-uppercase mb-1">Rec Room</h2>
+        <p>
+          637 Washington St, Hanover, MA 02339<br />
+          Located in Starland Sportsplex & Fun Park<br />
+          (781) 996-3054
+        </p>
+        <div class="map d-block d-md-inline-flex">
+          <div class="map-size"><img src="/images/map-size.jpg" alt="" /></div>
+          <iframe class="gmap" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2959.2399828418934!2d-70.8277102578408!3d42.12374542938569!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x89e49f9d29fc85cf%3A0x20a6f9d39e57cd85!2sRec%20Room!5e0!3m2!1sen!2sin!4v1738946745260!5m2!1sen!2sin" width="600" height="450" style="border: 0" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
+      </div>
+      <div class="col-md-7 mt-4 mt-5">
+        {embed="forms/contact"}
+      </div>
+    </div>
+  </div>
+</section>
+{/if}
+
+{page_content}
+
+{page_content:spacer}
+<div style="height: {content}px;"></div>
+{/page_content:spacer}
+
+{page_content:header_description_image}
+<section class="content-row {if page_content:next_field_name == 'header' || page_content:next_field_name == 'gallery'}pt-5{if:else}py-5{/if}{if page_content:next_field_name != 'gallery'} mb-5{/if}">
+  <div class="container narrow">
+    {content}
+    <div class="row">
+      {content:image}
+      <div class="col-md-5 d-none d-md-block">
+        <div class="img">
+          <img class="img-fluid" src="{url}" alt="{title}" loading="lazy" />
+        </div>
+      </div>
+      {/content:image}
+      <div class="col-md">
+        {if content:header}
+        <h2{if content:header_color} class="header-{content:header_color}"{/if}>{content:header}</h2>
+        {/if}
+        {content:description}
+      </div>
+    </div>
+    {/content}
+  </div>
+</section>
+{/page_content:header_description_image}
+
+{page_content:header}
+<section class="content-row mt-5">
+  <div class="container narrow">
+    <div class="heading-center text-center">
+      <h2>{content}</h2>
+    </div>
+  </div>
+</section>
+{/page_content:header}
+
+{page_content:image_text}
+<section class="place-to-meet py-5 mb-5">
+	<div class="container narrow">
+		<div class="row places-row">
+			{content}
+			<div class="col-md-6 col-lg-3 mt-4">
+				<div class="box">
+					{if content:image}
+					<div class="img">
+						{content:image}
+						<img src="{url}" alt="{title}" loading="lazy" />
+						{/content:image}
+					</div>
+					{/if}
+					<div class="over text-center pb-4">
+						<div class="star d-flex justify-content-center">
+							<div class="icon"><img src="/images/star-white.png" alt="" loading="lazy" /></div>
+						</div>
+						{if content:text}
+						<div class="text text-uppercase">{content:text}</div>
+						{/if}
+					</div>
+				</div>
+			</div>
+			{/content}
+		</div>
+	</div>
+</section>
+{/page_content:image_text}
+
+{page_content:image_text_button}
+<section class="promotions-row {if page_content:prev_field_name == 'header'}pb-5{if:else}py-5{/if} mb-5">
+	<div class="container narrow">
+		<div class="row">
+			{content}
+			<div class="col-md-6 mt-5">
+				<div class="box text-center">
+					{if content:image}
+					<div class="img mb-4">
+						{content:image}
+						<img src="{url}" alt="{title}" loading="lazy" />
+						{/content:image}
+					</div>
+					{/if}
+					<div class="text mb-5">
+						<div class="star d-flex justify-content-center">
+							<div class="icon"><img src="/images/yellow-star.svg" alt="" loading="lazy" height="26" width="26" /></div>
+						</div>
+						{if content:text}
+						<h2 class="text-uppercase mb-0">{content:text}</h2>
+						{/if}
+						{if content:button_text && content:button_link}
+						<a class="cta" href="{content:button_link}">{content:button_text}</a>
+						{/if}
+					</div>
+				</div>
+			</div>
+			{/content}
+		</div>
+	</div>
+</section>
+{/page_content:image_text_button}
+
+{page_content:gallery}
+<section class="content-row pb-5">
+  <div class="container narrow">
+    <div class="event-gallery mt-5">
+      {content}
+      <div class="img pic{content:count}">
+        {content:file}
+        <img src="{url}" alt="{title}" loading="lazy" />
+        {/content:file}
+      </div>
+      {/content}
+    </div>
+  </div>
+</section>
+{/page_content:gallery}
+
+{page_content:photo_gallery}
+<section class="page-title text-center text-uppercase pb-0">
+  <h1 class="h2 mb-0">Gallery</h1>
+  <div class="container narrow">
+    <div class="gallery-tag-wrap" id="tagGallery">
+      <div class="selected-tag d-flex justify-content-between align-items-center d-md-none my-4 p-2">
+        <div class="selected d-flex align-items-center"><span class="text">All</span></div>
+        <div class="arrow"><i class="bi bi-caret-up-fill"></i></div>
+      </div>
+      <div class="tag-gallery d-none d-md-flex mt-5">
+        <span class="cta-tag text-uppercase p-2 text-decoration-none d-inline-flex align-items-center justify-content-center active" data-category="all">
+          <span class="icon me-1">
+            <img class="me-1" src="/images/yellow-star.svg" alt="" loading="lazy" height="20" width="20" />
+          </span> All
+        </span>
+        <span class="cta-tag text-uppercase p-2 text-decoration-none d-inline-flex align-items-center justify-content-center" data-category="drinks">
+          <span class="icon me-1">
+            <img class="me-1" src="/images/yellow-star.svg" alt="" loading="lazy" height="20" width="20" />
+          </span> Drinks
+        </span>
+        <span class="cta-tag text-uppercase p-2 text-decoration-none d-inline-flex align-items-center justify-content-center" data-category="food">
+          <span class="icon me-1">
+            <img class="me-1" src="/images/yellow-star.svg" alt="" loading="lazy" height="20" width="20" />
+          </span> Food
+        </span>
+        <span class="cta-tag text-uppercase p-2 text-decoration-none d-inline-flex align-items-center justify-content-center" data-category="games">
+          <span class="icon me-1">
+            <img class="me-1" src="/images/yellow-star.svg" alt="" loading="lazy" height="20" width="20" />
+          </span> Games
+        </span>
+        <span class="cta-tag text-uppercase p-2 text-decoration-none d-inline-flex align-items-center justify-content-center" data-category="private-events">
+          <span class="icon me-1">
+            <img class="me-1" src="/images/yellow-star.svg" alt="" loading="lazy" height="20" width="20" />
+          </span> Private events
+        </span>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="gallery-row py-md-5 mb-5">
+  <div class="container narrow">
+    <div class="gallery">
+      {content}
+      <div class="img pic{content:count}"{if content:tag} data-category="{content:tag}"{/if}>
+        {content:file}
+        <img src="{url}" alt="{title}" loading="lazy" />
+        {/content:file}
+      </div>
+      {/content}
+    </div>
+  </div>
+</section>
+{/page_content:photo_gallery}
+
+{page_content:list}
+<section class="perfect-event py-5">
+  <div class="container narrow text-center">
+    {content}{if content:count == 1}{if content:list_item}<h2 class="mb-4">{content:list_item}</h2>{/if}{/if}{/content}
+    <div class="list-event">
+      <ul class="list-unstyled">
+        {content}{if content:count > 1}<li>{content:list_item}</li>{/if}{/content}
+      </ul>
+    </div>
+  </div>
+</section>
+{/page_content:list}
+
+{page_content:doc_download}
+<section class="download-meta {if page_content:prev_field_name == 'header'}pt-4 pb-5{if:else}py-5{/if}">
+  <div class="container narrow text-center">
+    <div class="cta-row">
+      {content}
+      {content:file}
+      <a class="cta-link text-uppercase p-2 text-decoration-none d-inline-flex align-items-center" href="{url}" target="_blank">
+        <span class="icon me-1"><img class="me-1" src="/images/yellow-star.svg" alt="" loading="lazy" height="20" width="20" /></span>
+        {title}
+      </a>
+      {/content:file}
+      {/content}
+    </div>
+  </div>
+</section>
+{/page_content:doc_download}
+
+{page_content:calendar}
+<section class="circle-hording calender-hording">
+	<div class="container gx-0 d-flex justify-content-center" style="max-width: 1520px">
+		<div class="circle">
+			<div class="border-wrap d-flex align-items-center justify-content-center justify-content-md-end">
+				<div class="star"><img src="/images/logo-stars.svg" alt="" width="110" height="198" /></div>
+				<div class="text">
+					{content}
+					{if content:header}
+					<div class="head mb-3">
+						<h2{if content:header_color} class="header-{content:header_color}"{/if}>{content:header}</h2>
+					</div>
+					{/if}
+					{content:description}
+					{/content}
+				</div>
+			</div>
+		</div>
+		<div class="calendar-wrap">
+			<div class="calendar" id="calendar"></div>
+			<div class="meta-calendar text-center mt-3">
+				<p>Days in red have events or entertainment.<br />Click on a day to jump to it.</p>
+			</div>
+		</div>
+	</div>
+</section>
+{/page_content:calendar}
+
+{page_content:schedule}
+<section class="month-events">
+  <div class="container">
+    <div class="nav-months justify-content-between mb-4 d-none d-md-flex">
+      <div class="month prev disabled flex-grow-1"><i class="bi bi-chevron-left"></i> See January</div>
+      <div class="month current flex-grow-1 text-center">February</div>
+      <div class="month next flex-grow-1 text-end">See March <i class="bi bi-chevron-right"></i></div>
+    </div>
+    <div class="heading mb-5">
+      <h2 class="text-uppercase mb-0"><strong>REC ROOM</strong> SCHEDULE</h2>
+    </div>
+    <div class="event-collapse clicked">
+      <div class="event-head d-flex">
+        <div class="date d-flex justify-content-center align-items-center">12</div>
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center flex-grow-1">
+          <div class="copy">
+            <h2>Event Title</h2>
+            <p>Wednesday, February 12th, 9pm - 10pm</p>
+            <p>Free Admission</p>
+          </div>
+          <div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">-</span></div>
+        </div>
+      </div>
+      <div class="event-content" style="display: block">
+        <div class="text">
+          <h2>About</h2>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.</p>
+          <h2>Website</h2>
+          <p><a href="#"></a> example.com</p>
+        </div>
+      </div>
+    </div>
+    <div class="event-collapse">
+      <div class="event-head d-flex">
+        <div class="date d-flex justify-content-center align-items-center">15</div>
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center flex-grow-1">
+          <div class="copy">
+            <h2>Event Title</h2>
+            <p>Saturday, February 15th, 9pm - 10pm</p>
+            <p>$10 at the Door</p>
+          </div>
+          <div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">+</span></div>
+        </div>
+      </div>
+      <div class="event-content">
+        <div class="text">
+          <h2>About</h2>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.</p>
+          <h2>Website</h2>
+          <p><a href="#"></a> example.com</p>
+        </div>
+      </div>
+    </div>
+    <div class="event-collapse">
+      <div class="event-head d-flex">
+        <div class="date d-flex justify-content-center align-items-center">20</div>
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center flex-grow-1">
+          <div class="copy">
+            <h2>Event Title</h2>
+            <p>Thursday, February 20th, 9pm - 10pm</p>
+            <p>Ticket Required</p>
+          </div>
+          <div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">+</span></div>
+        </div>
+      </div>
+      <div class="event-content">
+        <div class="text">
+          <h2>About</h2>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.</p>
+          <h2>Website</h2>
+          <p><a href="#"></a> example.com</p>
+        </div>
+      </div>
+    </div>
+    <div class="event-collapse">
+      <div class="event-head d-flex">
+        <div class="date d-flex justify-content-center align-items-center">25</div>
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center flex-grow-1">
+          <div class="copy">
+            <h2>Event Title</h2>
+            <p>Tuesday, February 25th, 9pm - 10pm</p>
+            <p>Ticket Required</p>
+          </div>
+          <div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">+</span></div>
+        </div>
+      </div>
+      <div class="event-content">
+        <div class="text">
+          <h2>About</h2>
+          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.</p>
+          <h2>Website</h2>
+          <p><a href="#"></a> example.com</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{/page_content:schedule}
+
+{page_content:image_page_hero}
+<section class="hero-img d-none d-md-block">
+  {content}
+  <img src="{url}" alt="{title}" />
+  {/content}
+</section>
+{/page_content:image_page_hero}
+
+{page_content:form}
+  {embed="forms/{content:value}"}
+{/page_content:form}
+
+{!-- <!-- DEFAULT FIELDS --> --}
+
+{page_content:header_description}
+<section class="sec fade-in py-3">
+  <div class="container">
+    <div class="content border-wrap text-center p-4">
+      {content}
+
+      {if content:header}
+      <h2>{content:header}</h2>
+      {/if}
+
+      {content:description}
+
+      {/content}
+    </div>
+  </div>
+</section>
+{/page_content:header_description}
+
+{page_content:links_section}
+<section class="sec more-services fade-in py-3">
+  <div class="container">
+    {fields}
+
+    {page_content:header}
+    {if content}
+    <div class="head text-center">
+      <h2>{content}</h2>
+    </div>
+    {/if}
+    {/page_content:header}
+
+    {page_content:button_links_head_desc}
+    <div class="row">
+      {content}
+      <div class="col-md-6 col-lg-3 mt-4">
+        <div class="box p-3 text-center vstack align-items-center h-100">
+          <div class="text flex-grow-1 mb-3">
+            
+            {if content:header}
+            <h2>{content:header}</h2>
+            {/if}
+
+            {content:description}
+
+          </div>
+
+          {if content:button_link_text && content:button_link_url}
+          <a class="cta mt-3" href="{content:button_link_url}">
+            {content:button_link_text}
+          </a>
+          {/if}
+
+        </div>
+      </div>
+      {/content}
+    </div>
+    {/page_content:button_links_head_desc}
+    {/fields}
+  </div>
+</section>
+{/page_content:links_section}
+
+{page_content:header_sub_header_desc_button}
+{content}
+<section class="sec fade-in py-3">
+  <div class="container">
+    <div class="content border-wrap p-4">
+      <div class="text-center mb-4">
+        
+        {if content:header}
+        <h2>{content:header}</h2>
+        {/if}
+        
+        {content:sub_header}
+
+      </div>
+
+      {content:description}
+
+      {if content:button_text && content:button_url}
+      <div class="text-center mt-4">
+        <a class="cta" href="{content:button_url}">
+          {content:button_text}
+        </a>
+      </div>
+      {/if}
+
+    </div>
+  </div>
+</section>
+{/content}
+{/page_content:header_sub_header_desc_button}
+
+{page_content:cta}
+{content}
+<section class="get-started fade-in">
+  <div class="container text-center">
+    <h2>{content:title}</h2>
+    {content:buttons_links}
+    <a class="cta blue mt-4" href="{content:buttons_links:button_link}">
+      {content:buttons_links:button_text}
+    </a>
+    {/content:buttons_links}
+  </div>
+</section>
+{/content}
+{/page_content:cta}
+
+{page_content:header_image_description_button}
+{content}
+<section class="sec fade-in py-3">
+  <div class="container">
+    
+    {if content:header}
+    <div class="text-center mb-4">
+      <h2>{content:header}</h2>
+    </div>
+    {/if}
+    
+    {content:image}
+    <img class="border-wrap w-100 h-100" src="{url}" alt="{title}" />
+    {/content:image}
+
+    {if !content:image}
+    <div class="screenshot-placeholder border-wrap d-flex align-items-center justify-content-center text-center p-3 h-100" style="min-height: 300px">
+      <p>Placeholder: Global Coverage Map Graphic</p>
+    </div>
+    {/if}
+
+    {if content:description || (content:button_text && content:button_link)}
+    <div class="text-center mt-4">
+
+      {content:description}
+
+      {if content:button_text && content:button_link}   
+      <a class="cta mt-4" href="{content:button_link}">
+        {content:button_text}
+      </a>
+      {/if}
+
+    </div>
+    {/if}
+
+  </div>
+</section>
+{/content}
+{/page_content:header_image_description_button}
+
+{page_content:team_section}
+{content}
+<section class="sec more-services fade-in py-3">
+  <div class="container">
+
+    {if content:header}
+    <div class="head text-center">
+      <h2>{content:header}</h2>
+    </div>
+    {/if}
+    
+    <div class="row" id="modalUserWrap">
+      {content:team_members}
+      <div class="col-md-6 col-lg-3 mt-4">
+        <div class="box p-3 text-center vstack align-items-center h-100">
+          
+          {content:team_members:team_image}
+          <img src="{url}" alt="{title}" />
+          {/content:team_members:team_image}
+
+          {if !content:team_members:team_image}
+          <div class="screenshot-placeholder border-wrap d-flex align-items-center justify-content-center text-center p-3 h-100 w-100" style="min-height: 150px">
+            <p>Placeholder: {content:team_members:title} Photo</p>
+          </div>
+          {/if}
+          
+          <div class="text flex-grow-1 mb-3 mt-3">
+
+            <h2 class="team-title">
+              {content:team_members:title}
+            </h2>
+
+            {if content:team_members:position}
+            <p class="team-position">
+              {content:team_members:position}
+            </p>
+            {/if}
+
+            {if content:team_members:bio}
+            <p class="team-bio d-none">
+              {content:team_members:bio}
+            </p>
+            {/if}
+
+          </div>
+          <a class="cta mt-3" href="#" data-bs-toggle="modal" data-bs-target="#userModal">View Bio</a>
+        </div>
+      </div>
+      {/content:team_members}
+    </div>
+  </div>
+</section>
+{/content}
+{/page_content:team_section}
+
+{page_content:buttons_links}
+<div class="d-flex justify-content-center">
+  {content}
+  <a href="{content:button_link}" class="cta-button primary">{content:button_text}</a>
+  {/content}
+</div>
+{/page_content:buttons_links}
+
+{page_content:header_desc_img_section}
+<section class="sec fade-in py-3">
+  <div class="container">
+    {fields}
+
+    {page_content:header}
+    <div class="text-center mb-4">
+      <h2>{content}</h2>
+    </div>
+    {/page_content:header}
+
+    {page_content:header_description_image}
+    {content}
+    <div class="row meat-contact mt-5 align-items-md-center">
+      <div class="col-md-6 text-center text-md-start">
+        
+        {if content:header}
+        <h2>{content:header}</h2>
+        {/if}
+        
+        <div class="my-4 d-md-none">
+
+          {content:image}
+          <img class="mw-100 mh-100" src="{url}" alt="{title}" />
+          {/content:image}
+
+          {if !content:image}
+          <div class="screenshot-placeholder border-wrap d-flex align-items-center justify-content-center text-center p-3 h-100" style="min-height: 250px">
+            <p>Placeholder: Google Map</p>
+          </div>
+          {/if}
+
+        </div>
+
+        {content:description}
+
+      </div>
+      <div class="col-md-6 d-none d-md-block">
+          
+          {content:image}
+          <img class="mw-100 mh-100" src="{url}" alt="{title}" />
+          {/content:image}
+
+          {if !content:image}
+          <div class="screenshot-placeholder border-wrap d-flex align-items-center justify-content-center text-center p-3 h-100" style="min-height: 250px">
+            <p>Placeholder: Google Map</p>
+          </div>
+          {/if}
+
+      </div>
+    </div>
+    {/content}
+    {/page_content:header_description_image}
+
+    {page_content:buttons_links}
+    <div class="text-center mt-5">
+      {content}
+      {if content:button_text && content:button_link}
+      <a class="cta" href="{content:button_link}">{content:button_text}</a>
+      {/if}
+      {/content}
+    </div>
+    {/page_content:buttons_links}
+
+    {/fields}
+  </div>
+</section>
+{/page_content:header_desc_img_section}
+
+{page_content:header_description_list}
+<section class="sec fade-in py-3">
+  <div class="container">
+    <div class="content border-wrap p-4">
+      {fields}
+      {page_content:header_description}
+      {content}
+      {if content:header || content:description}
+      <div class="text-center">
+
+        {if content:header}
+        <h2>{content:header}</h2>
+        {/if}
+
+        {content:description}
+
+      </div>
+      {/if}
+      {/content}
+      {/page_content:header_description}
+      {page_content:list}
+      <div class="d-flex justify-content-center mt-4">
+        <ul>
+          {content}
+          <li>{content:list_item}</li>
+          {/content}
+        </ul>
+      </div>
+      {/page_content:list}
+      {/fields}
+    </div>
+  </div>
+</section>
+{/page_content:header_description_list}
+
+{/page_content}
+
+{/exp:channel:entries}
+
+{footer}

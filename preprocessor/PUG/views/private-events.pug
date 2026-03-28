@@ -1,0 +1,83 @@
+- let siteBranch = 'REC ROOM';
+- let pageName = 'Private events';
+- let subPage = '';
+- let pageTitle = pageName + ' | ' + siteBranch
+
+include ../partials/head.pug
+include ../partials/header.pug
+include ../layouts/pageTitle.pug
+include ../layouts/innerHero.pug
+include ../layouts/formFields.pug
+include ../partials/footer.pug
+
+doctype html
+html(lang='en')
+    +head(pageTitle)
+
+    body.loading
+        +header()
+
+        +pageTitle()
+
+        +innerHero()
+
+        section.content-row.py-5
+            .container.narrow
+                .row
+                    .col-md-5.d-none.d-md-block
+                        .img
+                            img.img-fluid(src='images/logo-about.png', alt='', loading='lazy')
+                    .col-md
+                        h2 Looking for the perfect venue for your next private event?
+                        p Well, Rec Room is shaking things up with a new way to eat, drink, and party! With arcade classics, darts, yard games, delicious bites, and cocktails crafted by pros, your event will surely be unforgettable.
+                        p Whether you're planning an intimate birthday party, a large corporate event, or anything in between, The Rec Room offers the ideal setting for unforgettable memories. With over 20 high-tech arcade games, 3 outdoor seating areas with cozy firepits, and plenty of space for guests to enjoy, we provide endless entertainment options that will keep everyone engaged and having fun.
+                        p We know that food plays a huge role in any celebration, so we offer custom food packages designed to fit your event. Choose from passed appetizers, a sit-down dinner, or a buffet — whatever works best for you and your guests.
+                        p So, what makes Rec Room the ultimate venue for your event? Our partnership with Starland gets you access to 50 more arcade games and 10 thrilling attractions that are guaranteed to make your guests’ jaws drop and their hearts race!
+                        p Whether you’re hosting a group of 20 or 2,000, we’ve got you covered. From smaller, more intimate gatherings to large corporate events, our versatile space features A/V capabilities, and a dedicated team will work with you every step of the way to make sure your event is a total success. Plan your next big celebration with us at The Rec Room and make it a day (or night) to remember!
+
+                .event-gallery.mt-5
+                    - for (let i = 1; i <= 5; i++)
+                        div.img(class=`pic${i}`)
+                            img(src=`images/pe-pic${i}.jpg`, alt='', loading='lazy')
+
+        section.perfect-event.py-5
+            .container.narrow.text-center
+                h2.mb-4 Perfect for...
+                .list-event
+                    ul.list-unstyled
+                        each li in ['Adult Birthday Parties', 'Graduation Nights', 'Sports Banquets', 'Holiday Parties', 'Business Meetings', 'Bereavements', 'Adult Field Trips', 'Teen Parties', 'Sweet 16 Birthdays', 'Anniversary Parties', 'Company Outings', 'Fantasy Football Drafts', 'Class Reunions', 'Fundraiser', 'Team Building', 'Appreciation Parties', 'Networking Events', 'Bachelor/Bachelorette', 'Bar/Bat Mitzvah', 'Engagement Party', 'Wedding Rehearsal', 'Family Gatherings and More!']
+                            li=li
+
+        section.download-meta.py-5
+            .container.narrow.text-center
+                h2.mb-4 Download to learn more:
+                .cta-row
+                    each link in ['Corporate/group outings', 'Private Events Brochure']
+                        a.cta-link.text-uppercase.p-2.text-decoration-none.d-inline-flex.align-items-center(href='#') #[span.icon.me-1 #[img.me-1(src='images/yellow-star.svg', alt='', loading='lazy', height='20', width='20')]] #{link}
+
+        section.event-contact.py-5
+            .container(style='max-width:740px')
+                form.row.event-contact__form(action='')
+                    .col-md-12.text-center.mb-4
+                        h2 Your Contact Information
+                    +inputField('First Name (required)', 'text', 'First Name', 6)
+                    +inputField('Last Name (required)', 'text', 'Last Name', 6)
+                    +inputField('Your Email (required)', 'email', 'email')
+                    +inputField('Your Phone Number (required)', 'tel', 'phone', 6)
+                    +inputField('Ext.', 'number', 'ext', 6)
+                    +inputSelect('How would you prefer to be contacted?', ['Phone', 'Email'], 'contact-with')
+                    +inputField('Company', 'text', 'company', 12)
+                    .col-md-12.text-center.mt-5.mb-4
+                        h2 Your Event Details
+                    +inputField('Nature of this Event', 'text', 'nature Event', 12, '(e.g. Birthday Party or Business Dinner)')
+                    +inputField('Event Date (required)', 'date', 'date', 6)
+                    +inputField('Start Time (req’d)', 'time', 'start Time', 3)
+                    +inputField('End Time (req’d)', 'time', 'end Time', 3)
+                    +inputField('Number of People', 'number', 'people', 12)
+                    +inputField('Is there any additional information you would like to add?', 'text', 'Information', 12, '(e.g. Guest(s) of honor) Age & Name)')
+                    +inputField('How did you hear about us? (required)', 'text', 'heard us', 12)
+                    +inputCheck('Subscribe to our newsletter and promotional emails?', 'subscribe')
+                    .col-12.text-center.mt-4
+                        +buttonForm('Submit')
+
+        +footer()

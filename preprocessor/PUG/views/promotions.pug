@@ -1,0 +1,45 @@
+- let siteBranch = 'REC ROOM';
+- let pageName = 'Promotions';
+- let subPage = '';
+- let pageTitle = pageName + ' | ' + siteBranch
+
+include ../partials/head.pug
+include ../partials/header.pug
+include ../layouts/pageTitle.pug
+include ../layouts/innerHero.pug
+include ../partials/footer.pug
+
+doctype html
+html(lang='en')
+    +head(pageTitle)
+
+    body.loading
+        +header()
+
+        +pageTitle()
+
+        +innerHero()
+
+        section.promotions-row.py-5.mb-5
+            .container.narrow
+                .head.text-center
+                    h2.mb-0 Check out the great deals happening at Starland and Rec Room!
+                .row
+                    mixin promotionBox(text)
+                        .col-md-6.mt-5
+                            .box.text-center
+                                .img.mb-4
+                                    img(src=`images/${text.replace(/[^a-zA-Z ]/g, '').trim().replaceAll(' ', '-').toLowerCase()}.jpg`, alt='')
+                                .text.mb-5
+                                    .star.d-flex.justify-content-center
+                                        .icon
+                                            img(src='images/yellow-star.svg', alt='', loading='lazy', height='26', width='26')
+                                    h2.text-uppercase.mb-0=text
+                                    a.cta(href='#') Learn More
+
+                    +promotionBox('Unlimited Game Play!')
+                    +promotionBox('$35 Indoor Pass!')
+                    +promotionBox('Free Mini Golf')
+                    +promotionBox('Bogo Thursdays!')
+
+        +footer()

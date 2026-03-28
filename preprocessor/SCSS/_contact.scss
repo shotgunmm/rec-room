@@ -1,0 +1,53 @@
+.contact-row {
+	.map {
+		position: relative;
+
+		.map-size {
+			opacity: 0;
+			pointer-events: none;
+			user-select: none;
+			visibility: hidden;
+
+			@media (max-width: 767px) {
+				img {
+					width: 100%;
+				}
+			}
+		}
+
+		.gmap {
+			height: 100%;
+			left: 0;
+			position: absolute;
+			top: 0;
+			width: 100%;
+		}
+	}
+
+	h2 {
+		color: $orange;
+		font: 500 20px $jos;
+	}
+
+	p {
+		color: $black;
+		font: 500 16px/1.85 $pub;
+		letter-spacing: normal;
+	}
+
+	.contact-form {
+		.form-label {
+			color: $black;
+			font: 500 16px $pub;
+		}
+
+		.form-control {
+			background: #f8f8e2;
+			height: 44px;
+		}
+
+		textarea.form-control {
+			height: 260px;
+		}
+	}
+}

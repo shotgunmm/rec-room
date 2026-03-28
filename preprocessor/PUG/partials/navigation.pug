@@ -1,0 +1,14 @@
+mixin navigation()
+    nav#siteNav.site_nav.d-none.d-lg-block
+        ul.nav.align-items-center.justify-content-between
+            each link, page in {'Home':'/', 'About':'about.html', 'Promotions':'promotions.html', 'Menu':'#', 'Private events':'private-events.html', 'Calendar':'calendar.html', 'Gallery':'gallery.html', 'Contact':'contact.html'}
+                - let active = page === pageName ? 'active' : '';
+                if page === 'Promotions'
+                    li.d-flex.align-items-center
+                        span.star.me-2.d-flex
+                            img(src='images/yellow-star.svg', alt='', height='20', width='18')
+                        a(href=link, class=active)=page.toUpperCase()
+                else
+                    li #[a(href=link, class=active)=page.toUpperCase()]
+            li
+                a.cta.py-2.px-3.rounded-2(href='#') BOOK EVENT

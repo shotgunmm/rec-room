@@ -1,0 +1,17 @@
+mixin header
+    .loader-wrap.d-flex.align-items-center.justify-content-center
+        .loader
+    header#header.header
+        nav.sites_nav.d-none.d-lg-block
+            ul.nav
+                each logo in ['rec-room', 'starland', 'starland-sports', 'starland-fun', 'fuel', 'level-up']
+                    li.d-flex.align-items-center.justify-content-center.px-3(class=(logo === 'rec-room') ? 'active' : '') #[a(href='#') #[img(src=`images/${logo}-logo.svg`, alt='') ] ]
+        .container.gx-lg-0.py-3.d-flex.d-lg-block.justify-content-between.align-items-center
+            .brand.d-lg-none #[a(href='/') #[img(src='images/rec-room-logo.svg', alt='')]]
+            include navigation.pug
+            +navigation
+
+            #navCall.call_nav.d-lg-none
+                -for (i=0; i<3; i++)
+                    span.line
+

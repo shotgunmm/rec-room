@@ -1,0 +1,40 @@
+.loader-wrap {
+	background: $white;
+	height: 100%;
+	left: 0;
+	position: fixed;
+	top: 0;
+	width: 100%;
+	z-index: 1000;
+}
+
+.loader {
+	animation: wave 1.5s infinite linear;
+	aspect-ratio: 1;
+	background: $orange;
+	border-radius: 50%;
+	box-shadow: 0 0 0 0 $orange;
+	position: relative;
+	width: 20px;
+
+	&:before,
+	&:after {
+		animation: inherit;
+		animation-delay: -0.5s;
+		border-radius: inherit;
+		box-shadow: 0 0 0 0 $orange;
+		content: '';
+		inset: 0;
+		position: absolute;
+	}
+
+	&:after {
+		animation-delay: -1s;
+	}
+}
+
+@keyframes wave {
+	100% {
+		box-shadow: 0 0 0 40px $black;
+	}
+}

@@ -1,0 +1,39 @@
+@import 'mixin';
+@import 'header';
+@import 'hero';
+@import 'home';
+@import 'promotionsRow';
+@import 'privateEvent';
+@import 'calendar';
+@import 'gallery';
+@import 'form';
+@import 'contact';
+@import 'circleHording';
+@import 'typography';
+@import 'common';
+@import 'footer';
+
+.container {
+	max-width: 100%;
+
+	@media (min-width: 1025px) {
+		max-width: calc(100% - 200px);
+	}
+
+	@media (min-width: 1440px) {
+		max-width: 1320px;
+	}
+
+	&.narrow {
+		@media (min-width: 1440px) {
+			max-width: 1104px;
+		}
+	}
+}
+
+body {
+	font-family: $jos;
+	letter-spacing: 0.13em;
+}
+
+@import 'loader';

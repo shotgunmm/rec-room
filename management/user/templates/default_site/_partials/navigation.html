@@ -1,0 +1,45 @@
+<header class="header" id="header">
+	<nav class="sites_nav d-none d-lg-block">
+		<ul class="nav">
+			<li class="d-flex align-items-center justify-content-center px-3 active">
+				<a href="/"><img src="/images/rec-room-logo.svg" alt="Rec Room" /></a>
+			</li>
+			<li class="d-flex align-items-center justify-content-center px-3">
+				<a href="https://starlandsports.com/" target="_blank"><img src="/images/starland-logo.svg" alt="StarLand" /></a>
+			</li>
+			<li class="d-flex align-items-center justify-content-center px-3">
+				<a href="https://starlandsports.com/sportsplex" target="_blank"><img src="/images/starland-sports-logo.svg" alt="StarLand Sports" /></a>
+			</li>
+			<li class="d-flex align-items-center justify-content-center px-3">
+				<a href="https://starlandsports.com/fun-park" target="_blank"><img src="/images/starland-fun-logo.svg" alt="StarLand Fun" /></a>
+			</li>
+			<li class="d-flex align-items-center justify-content-center px-3">
+				<a href="https://fuel53.com/" target="_blank"><img src="/images/fuel-logo.svg" alt="Fuel" /></a>
+			</li>
+			<li class="d-flex align-items-center justify-content-center px-3">
+				<a href="https://lvluphoops.com/" target="_blank"><img src="/images/level-up-logo.svg" alt="Level Up" /></a>
+			</li>
+		</ul>
+	</nav>
+	<div class="container gx-lg-0 py-3 d-flex d-lg-block justify-content-between align-items-center">
+		<div class="brand d-lg-none">
+			<a href="/"><img src="/images/rec-room-logo.svg" alt="Rec Room" /></a>
+		</div>
+		<nav class="site_nav d-none d-lg-block" id="siteNav">
+			<ul class="nav align-items-center justify-content-between text-uppercase">
+				{exp:structure:nav_basic show_depth="1"}
+				<li class="{if root:active}active{/if}{if root:page_url == '/promotions/'} d-flex align-items-center{/if}">
+					{if root:page_url == '/promotions/'}<span class="star me-2 d-flex"><img src="/images/yellow-star.svg" alt="" height="20" width="18" /></span>{/if}
+					{if root:page_url == '/menu/'}
+					<a href="{menu-url}" target="_blank">Menu</a>
+					{if:else}
+					<a href="{root:page_url}"{if root:active} class="active"{/if}>{root:title}</a>
+					{/if}
+				</li>
+				{/exp:structure:nav_basic}
+				<li><a class="cta py-2 px-3 rounded-2" href="/private-events/#book-event">BOOK EVENT</a></li>
+			</ul>
+		</nav>
+		<div class="call_nav d-lg-none" id="navCall"><span class="line"></span><span class="line"></span><span class="line"></span></div>
+	</div>
+</header>
