@@ -1,0 +1,41 @@
+- let siteBranch = 'REC ROOM';
+- let pageName = 'About';
+- let subPage = '';
+- let pageTitle = pageName + ' | ' + siteBranch
+
+include ../partials/head.pug
+include ../partials/header.pug
+include ../layouts/pageTitle.pug
+include ../layouts/innerHero.pug
+include ../layouts/placesRow.pug
+include ../partials/footer.pug
+
+doctype html
+html(lang='en')
+    +head(pageTitle)
+
+    body.loading
+        +header()
+
+        +pageTitle()
+
+        +innerHero()
+
+        section.content-row.py-5.mb-5
+            .container.narrow
+                .row
+                    .col-md-5.d-none.d-md-block
+                        .img
+                            img.img-fluid(src='images/logo-about.png', alt='', loading='lazy')
+                    .col-md
+                        h2 Welcome to #[strong.text-orange.text-uppercase The Rec Room], your ultimate destination for great food, cold drinks, and non-stop entertainment!
+                        p Whether you're here to catch the game on our mega videowall, enjoy a craft beer or cocktail, play darts or relive the nostalgia of classic arcade games, we’ve got something for everyone. Our menu is packed with mouthwatering bites perfect for any occasion.
+                        p Looking to take the fun up a notch? We've got you covered with weekly entertainment like open mic nights, karaoke, and live bands most Saturdays. And if you're in the mood for some fresh air, our outdoor seating area features cozy firepits, lawn games, and a laid-back vibe perfect for enjoying the night.
+                        p Looking for a sports bar in Hanover, MA? With 16 giant screens and a video wall, plus our skybox views of the courts - you won’t miss a single play. 
+                        p The Rec Room is also an awesome event venue, ready to host everything from birthdays to corporate gatherings. No matter what brings you through our doors, we’re all about good times, great company, and unforgettable memories!
+                .heading-center.my-5.text-center
+                    h2 Learn more about Rec Room
+
+                +placesRow('Gallery', 'Menu', 'Calendar', 'Private Events')
+
+        +footer()

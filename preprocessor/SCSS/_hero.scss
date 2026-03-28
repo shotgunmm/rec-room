@@ -1,0 +1,90 @@
+.hero-home {
+	border-top: 10px solid $navy;
+
+	@media (min-width: 768px) {
+		border-width: 30px;
+	}
+
+	.hero-slider {
+		@media (min-width: 768px) {
+			height: 100%;
+		}
+
+		@media (min-width: 1025px) {
+			height: 580px;
+		}
+
+		img {
+			height: 100%;
+			object-fit: cover;
+			object-position: left bottom;
+			width: 100%;
+		}
+	}
+
+	.legend {
+		background: $yellow;
+
+		.month {
+			color: $orange;
+			font: 700 20px $pub;
+		}
+
+		.punch {
+			font: 36px/1.1 $jos;
+
+			strong {
+				font-weight: 600;
+			}
+		}
+
+		.dya {
+			font-size: 18px;
+		}
+	}
+
+	.day-event {
+		margin-block: 2rem;
+
+		.on-day {
+			font: 500 16px $pub;
+			font-weight: 500;
+
+			.num {
+				background-color: $orange;
+				color: $white;
+				height: 38px;
+				margin-right: 1.25rem;
+				width: 38px;
+			}
+
+			+ .on-day {
+				margin-top: 1rem;
+			}
+		}
+	}
+
+	.more {
+		color: $orange;
+		font: 700 18px $pub;
+	}
+}
+
+.hero-img {
+	height: 240px;
+	position: relative;
+
+	@media (min-width: 1025px) {
+		height: 350px;
+	}
+
+	img {
+		height: 100%;
+		left: 0;
+		object-fit: cover;
+		object-position: center;
+		position: absolute;
+		top: 0;
+		width: 100%;
+	}
+}

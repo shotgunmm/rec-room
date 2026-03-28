@@ -1,0 +1,82 @@
+.place-to-meet {
+	.head {
+		h2 {
+			color: $black;
+			font-weight: 400;
+
+			strong {
+				font-weight: 600;
+			}
+		}
+	}
+}
+
+.event-book {
+	background: $yellow;
+	isolation: isolate;
+	position: relative;
+
+	@media (max-width: 767px) {
+		overflow: hidden;
+	}
+
+	.img-frame {
+		@media (max-width: 767px) {
+			height: 100%;
+			left: 0;
+			position: absolute;
+			top: 0;
+			width: 100%;
+		}
+
+		@media (min-width: 768px) {
+			position: relative;
+
+			&:before {
+				content: '';
+				display: block;
+				padding-top: 600px;
+			}
+		}
+
+		img {
+			height: 140%;
+			left: 0;
+			object-fit: cover;
+			object-position: center;
+			position: absolute;
+			top: 0;
+			width: 140%;
+
+			@media (min-width: 768px) {
+				height: 100%;
+				object-position: left top;
+				width: 100%;
+			}
+		}
+	}
+
+	.over {
+		padding-block: 5rem 10rem;
+		position: relative;
+		z-index: 1;
+
+		@media (min-width: 768px) {
+			left: 0;
+			padding-block: 8rem;
+			position: absolute;
+			top: 0;
+			width: 100%;
+		}
+
+		h2 {
+			color: $white;
+		}
+
+		.cta {
+			margin-top: 2.5em;
+			min-height: 54px;
+			min-width: 205px;
+		}
+	}
+}

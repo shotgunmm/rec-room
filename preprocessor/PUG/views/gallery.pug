@@ -1,0 +1,35 @@
+- let siteBranch = 'REC ROOM';
+- let pageName = 'Gallery';
+- let subPage = '';
+- let pageTitle = pageName + ' | ' + siteBranch
+
+include ../partials/head.pug
+include ../partials/header.pug
+include ../partials/footer.pug
+
+doctype html
+html(lang='en')
+    +head(pageTitle)
+
+    body.loading
+        +header()
+
+        section.page-title.text-center.text-uppercase.pb-0
+            h1.mb-0=pageName
+            .container.narrow
+                #tagGallery.gallery-tag-wrap
+                    .selected-tag.d-flex.justify-content-between.align-items-center.d-md-none.my-4.p-2
+                        .selected.d-flex.align-items-center #[span.text All ]
+                        .arrow #[i.bi.bi-caret-up-fill ]
+                    .tag-gallery.d-none.d-md-flex.mt-5
+                        each tag, index in ['All', 'Drinks', 'Food', 'Games', 'Private events']
+                            span.cta-tag.text-uppercase.p-2.text-decoration-none.d-inline-flex.align-items-center.justify-content-center(class=(index === 0 ? 'active' : '')) #[span.icon.me-1 #[img.me-1(src='images/yellow-star.svg', alt='', loading='lazy', height='20', width='20')]] #{tag}
+
+        section.gallery-row.py-md-5.mb-5
+            .container.narrow
+                .gallery
+                    - for (let i = 1; i <= 11; i++)
+                        div.img(class=`pic${i}`)
+                            img(src=`images/ge-pic${i}.jpg`, alt='', loading='lazy')
+
+        +footer()

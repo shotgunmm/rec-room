@@ -1,0 +1,17 @@
+include formFields.pug
+
+mixin signUp
+    section.sign-up
+        .container.narrow
+            .row
+                .col-md-6
+                    .copy
+                        h2.text-uppercase #[strong.text-yellow SIGN UP] FOR OUR MAILING LIST
+                        p Stay up to date on all things happening at the Rec Room! Get weekly updates on live performances, calendars, events, new menu items and specials.
+                .col-md-6.mt-4.mt-md-0
+                    form.sign-up-form(action="")
+                        +inputField('Name')
+                        +inputField('Email', 'email')
+                .col-12.text-center.mt-4
+                    +buttonForm('book now')
+

@@ -1,0 +1,109 @@
+.bg-yellow {
+	background-color: $yellow;
+}
+
+.places-row {
+	.box {
+		position: relative;
+
+		.over {
+			border-bottom: 2px solid $white;
+			border-left: 2px solid $white;
+			border-right: 2px solid $white;
+			left: 50%;
+			position: absolute;
+			top: 50%;
+			transform: translate(-50%, -50%);
+			width: 185px;
+			z-index: 1;
+
+			@include overStar($white, 5px);
+
+			.text {
+				color: $white;
+				font: 600 16px/1 $jos;
+			}
+		}
+
+		@include imgCover();
+	}
+}
+
+.content-row {
+	h2 {
+		color: $blue;
+		font-weight: 500;
+		letter-spacing: 0.06em;
+
+		@media (min-width: 768px) {
+			font-size: 24px;
+		}
+
+		strong {
+			font-weight: 700;
+		}
+	}
+
+	p {
+		color: $black;
+		line-height: 1.5;
+
+		@media (min-width: 768px) {
+			font-size: 16px;
+		}
+	}
+}
+
+.cta {
+	background-color: $orange;
+	color: $white;
+	font: 600 18px $jos;
+
+	&.after-star {
+		position: relative;
+
+		.star {
+			bottom: calc(100% - 21px);
+			left: calc(100% - 21px);
+			pointer-events: none;
+			position: absolute;
+		}
+	}
+
+	&:hover {
+		background-color: $navy;
+		color: $white;
+	}
+}
+
+.page-title {
+	border-top: 1px solid $navy;
+	padding-block: 3rem;
+
+	@media (min-width: 768px) {
+		padding-block: 5rem;
+	}
+
+	.h2 {
+		color: $orange;
+	}
+}
+
+.sign-up {
+	background: $navy;
+	padding-block: 5rem;
+
+	h2 {
+		font-weight: 400;
+	}
+
+	p {
+		font: 500 18px $pub;
+		letter-spacing: 0.06em;
+	}
+
+	h2,
+	p {
+		color: $white;
+	}
+}

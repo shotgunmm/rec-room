@@ -1,0 +1,69 @@
+$orange: #e04a26;
+$blue: #00669b;
+$yellow: #fbad12;
+$navy: #002345;
+$black: #000;
+$white: #fff;
+$liteBg: #fffff2;
+
+$jos: 'Jost', serif;
+$pub: 'Public Sans', serif;
+
+@mixin imgCover($size: 100%) {
+	.img {
+		overflow: hidden;
+		position: relative;
+
+		&:before {
+			content: '';
+			display: block;
+			padding-top: 62%;
+
+			@media (min-width: 992px) {
+				padding-top: $size;
+			}
+		}
+
+		img {
+			height: 101%;
+			left: 0;
+			object-fit: cover;
+			object-position: center;
+			position: absolute;
+			top: 0;
+			width: 101%;
+		}
+	}
+}
+
+@mixin overStar($color, $space) {
+	.star {
+		margin-left: -2px;
+		overflow: hidden;
+		transform: translateY(-50%);
+		width: calc(100% + 4px);
+
+		.icon {
+			position: relative;
+
+			&:before,
+			&:after {
+				background: $color;
+				content: '';
+				height: 2px;
+				position: absolute;
+				top: 50%;
+				transform: translateY(-50%);
+				width: 100vw;
+			}
+
+			&:before {
+				right: calc(100% + #{$space});
+			}
+
+			&:after {
+				left: calc(100% + #{$space});
+			}
+		}
+	}
+}

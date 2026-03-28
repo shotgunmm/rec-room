@@ -1,0 +1,39 @@
+mixin footer
+    footer#footer.footer
+        .footer-site
+            .container-fluid.gx-md-0
+                .row.gx-md-0
+                    .col-md-4.col-lg-3.p-4.p-xl-5.bg-yellow.text-center
+                        .logo
+                            a(href='#')
+                                img.img-fluid(src='images/footer-logo.png', alt='')
+                    .col-md.p-4.p-xl-5
+                        .row.gx-md-0
+                            .col-lg-5.col-xl-4.pe-md-4.pt-5.pt-md-0
+                                .copy.mb-lg-0.mb-5
+                                    h2 REC ROOM
+                                    ul.list-unstyled.column-2
+                                        each link in ['Home', 'About', 'Promotions', 'Menu', 'Private events', 'Calendar', 'Gallery', 'Contact']
+                                            li #[a(href='#')=link.toUpperCase()]
+                                h3 FUEL ESPRESSO & BAGEL CO.#[br] STARLAND
+                            .col-md.ps-lg-4.pb-5.pb-md-0.mt-4.mt-lg-0.d-flex.justify-content-between.bod-left
+                                .copy
+                                    h2 (781) 996-3054
+                                    p.text-orange Hours:
+                                    p Mon - Fri: 4p-12a#[br] Sat: 12p-12a#[br] Sun: 12p-8p
+                                    p.fst-italic Thurs - Sat:#[br] Bar Area 21+ after 7pm
+                                .logo-star
+                                    img(src='images/footer-star-logo.svg', alt='')
+        .footer-social.text-center.py-4.py-md-5
+            .social
+                ul.nav.justify-content-center
+                    each social in ['facebook', 'instagram', 'envelope']
+                        li.mx-3.mb-4 #[a(href='#') #[i.bi(class=`bi-${social}`)] ]
+            .copyright
+                p ©2024 Starland. All Rights Reserved
+    if pageName === 'Calendar'
+        script(src='js/calendar.js')
+    //- script(src='https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js', integrity='sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz', crossorigin='anonymous')
+    script(src='https://code.jquery.com/jquery-3.7.1.min.js', integrity='sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=', crossorigin='anonymous')
+    //- script(src='https://cdnjs.cloudflare.com/ajax/libs/OwlCarousel2/2.3.4/owl.carousel.min.js', integrity='sha512-bPs7Ae6pVvhOSiIcyUClR7/q2OAsRiovw4vAkX+zJbw3ShAeeqezq50RIIcIURq7Oa20rW2n2q+fyXBNcU9lrw==', crossorigin='anonymous', referrerpolicy='no-referrer')
+    script(src='js/app.js')

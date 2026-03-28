@@ -1,0 +1,3 @@
+mixin innerHero(mobHide=false)
+    section.hero-img(class=(mobHide ? 'd-none d-md-block' : ''))
+        img(src=`images/${pageName.replaceAll(' ', '-').toLowerCase()}-hero.jpg`, alt="")

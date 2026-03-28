@@ -1,0 +1,14 @@
+mixin placesRow(...places)
+    .row.places-row
+        mixin placeBox(text)
+            .col-md-6.col-lg-3.mt-4
+                .box
+                    .img
+                        img(src=`images/${text.replace(' ', '-').toLowerCase()}-place.jpg`, alt="", loading='lazy')
+                    .over.text-center.pb-4
+                        .star.d-flex.justify-content-center
+                            .icon
+                                img(src="images/star-white.png", alt="", loading='lazy')
+                        .text.text-uppercase=text
+        each place in places
+            +placeBox(place)
