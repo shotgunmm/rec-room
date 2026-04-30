@@ -5,3 +5,7 @@
 .env
 sitemap.xml
 .vscode
+
+CLAUDE.md
+technical-spec.md
+EE-ADDON-BUILDER-ISSUES.md
