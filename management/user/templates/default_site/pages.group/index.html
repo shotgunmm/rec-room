@@ -14,30 +14,6 @@
   {/banner_image:image}
 {/banner_image}
 
-{if entry_id == 18}
-<section class="contact-row pb-5 mb-5">
-  <div class="container narrow">
-    <div class="row">
-      <div class="col-md-5">
-        <h2 class="text-uppercase mb-1">Rec Room</h2>
-        <p>
-          637 Washington St, Hanover, MA 02339<br />
-          Located in Starland Sportsplex & Fun Park<br />
-          (781) 996-3054
-        </p>
-        <div class="map d-block d-md-inline-flex">
-          <div class="map-size"><img src="/images/map-size.jpg" alt="" /></div>
-          <iframe class="gmap" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d2959.2399828418934!2d-70.8277102578408!3d42.12374542938569!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x89e49f9d29fc85cf%3A0x20a6f9d39e57cd85!2sRec%20Room!5e0!3m2!1sen!2sin!4v1738946745260!5m2!1sen!2sin" width="600" height="450" style="border: 0" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
-        </div>
-      </div>
-      <div class="col-md-7 mt-4 mt-5">
-        {embed="forms/contact"}
-      </div>
-    </div>
-  </div>
-</section>
-{/if}
-
 {page_content}
 
 {page_content:spacer}
@@ -285,17 +261,23 @@
 						<h2{if content:header_color} class="header-{content:header_color}"{/if}>{content:header}</h2>
 					</div>
 					{/if}
-					{content:description}
 					{/content}
+					<ul>
+					{exp:event_calendar:events_list recurring="yes" single="no" limit="10" status="open" var_prefix="ev"}
+					<li><strong>{ev:day_of_week}: {ev:title}</strong>{if ev:description} - {ev:description}{/if}</li>
+					{/exp:event_calendar:events_list}
+					</ul>
+          {content}
+          {content:description}
+          {/content}
 				</div>
 			</div>
 		</div>
-		<div class="calendar-wrap">
-			<div class="calendar" id="calendar"></div>
-			<div class="meta-calendar text-center mt-3">
-				<p>Days in red have events or entertainment.<br />Click on a day to jump to it.</p>
-			</div>
-		</div>
+		{exp:event_calendar:display
+      single="yes"
+      recurring="no"
+      status="open"
+    }
 	</div>
 </section>
 {/page_content:calendar}
@@ -304,96 +286,33 @@
 <section class="month-events">
   <div class="container">
     <div class="nav-months justify-content-between mb-4 d-none d-md-flex">
-      <div class="month prev disabled flex-grow-1"><i class="bi bi-chevron-left"></i> See January</div>
-      <div class="month current flex-grow-1 text-center">February</div>
-      <div class="month next flex-grow-1 text-end">See March <i class="bi bi-chevron-right"></i></div>
+      <div class="month prev flex-grow-1" data-calendar-nav-prev><i class="bi bi-chevron-left"></i> See <span></span></div>
+      <div class="month current flex-grow-1 text-center" data-calendar-month-label></div>
+      <div class="month next flex-grow-1 text-end" data-calendar-nav-next>See <span></span> <i class="bi bi-chevron-right"></i></div>
     </div>
     <div class="heading mb-5">
       <h2 class="text-uppercase mb-0"><strong>REC ROOM</strong> SCHEDULE</h2>
     </div>
-    <div class="event-collapse clicked">
+    <div data-calendar-event-list>
+    {exp:event_calendar:events_list single="yes" recurring="no" status="open" limit="100" var_prefix="ev"}
+    <div class="event-collapse{if ev:count == 1} clicked{/if}" data-event-date="{ev:date_key}">
       <div class="event-head d-flex">
-        <div class="date d-flex justify-content-center align-items-center">12</div>
+        <div class="date d-flex justify-content-center align-items-center">{ev:day_num}</div>
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center flex-grow-1">
           <div class="copy">
-            <h2>Event Title</h2>
-            <p>Wednesday, February 12th, 9pm - 10pm</p>
-            <p>Free Admission</p>
+            <h2>{ev:title}</h2>
+            <p>{ev:date_line}</p>
           </div>
-          <div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">-</span></div>
+          <div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">{if ev:count == 1}-{if:else}+{/if}</span></div>
         </div>
       </div>
-      <div class="event-content" style="display: block">
+      <div class="event-content"{if ev:count == 1} style="display:block"{/if}>
         <div class="text">
-          <h2>About</h2>
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.</p>
-          <h2>Website</h2>
-          <p><a href="#"></a> example.com</p>
+          {if ev:description}<h2>About</h2><p>{ev:description}</p>{/if}
         </div>
       </div>
     </div>
-    <div class="event-collapse">
-      <div class="event-head d-flex">
-        <div class="date d-flex justify-content-center align-items-center">15</div>
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center flex-grow-1">
-          <div class="copy">
-            <h2>Event Title</h2>
-            <p>Saturday, February 15th, 9pm - 10pm</p>
-            <p>$10 at the Door</p>
-          </div>
-          <div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">+</span></div>
-        </div>
-      </div>
-      <div class="event-content">
-        <div class="text">
-          <h2>About</h2>
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.</p>
-          <h2>Website</h2>
-          <p><a href="#"></a> example.com</p>
-        </div>
-      </div>
-    </div>
-    <div class="event-collapse">
-      <div class="event-head d-flex">
-        <div class="date d-flex justify-content-center align-items-center">20</div>
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center flex-grow-1">
-          <div class="copy">
-            <h2>Event Title</h2>
-            <p>Thursday, February 20th, 9pm - 10pm</p>
-            <p>Ticket Required</p>
-          </div>
-          <div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">+</span></div>
-        </div>
-      </div>
-      <div class="event-content">
-        <div class="text">
-          <h2>About</h2>
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.</p>
-          <h2>Website</h2>
-          <p><a href="#"></a> example.com</p>
-        </div>
-      </div>
-    </div>
-    <div class="event-collapse">
-      <div class="event-head d-flex">
-        <div class="date d-flex justify-content-center align-items-center">25</div>
-        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center flex-grow-1">
-          <div class="copy">
-            <h2>Event Title</h2>
-            <p>Tuesday, February 25th, 9pm - 10pm</p>
-            <p>Ticket Required</p>
-          </div>
-          <div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">+</span></div>
-        </div>
-      </div>
-      <div class="event-content">
-        <div class="text">
-          <h2>About</h2>
-          <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum imperdiet massa at tellus feugiat porttitor. Duis vitae malesuada ligula. Morbi rhoncus id orci cursus elementum. Morbi vitae felis purus. Duis eu placerat purus. Donec dictum finibus sem cursus sodales. Sed vitae tincidunt nulla, vel sagittis orci. Donec egestas neque eu luctus dapibus.</p>
-          <h2>Website</h2>
-          <p><a href="#"></a> example.com</p>
-        </div>
-      </div>
+    {/exp:event_calendar:events_list}
     </div>
   </div>
 </section>
@@ -407,8 +326,58 @@
 </section>
 {/page_content:image_page_hero}
 
+{page_content:contact_section}
+<!-- {content}
+    {content:header}
+    {content:description}
+    {content:map_embed_code}
+    Between {content:map_width:min} and {content:map_width:max} the selected value is {content:map_width:prefix} <span class="value">{content:map_width}</span> {content:map_width:suffix} 
+    Between {content:map_height:min} and {content:map_height:max} the selected value is {content:map_height:prefix} <span class="value">{content:map_height}</span> {content:map_height:suffix} 
+    {content:form:label}: {content:form:value}
+{/content} -->
+{content}
+<style>
+  .map {
+    width: {if content:map_width}{content:map_width}{if:else}348{/if}px;
+    height: {if content:map_height}{content:map_height}{if:else}467{/if}px;
+  }
+  @media (max-width: 767px) {
+    .map {
+      width: 100%;
+    }
+  }
+</style>
+{/content}
+<section class="contact-row pb-5 mb-5">
+  <div class="container narrow">
+    <div class="row">
+      {content}
+      {if content:header || content:description || content:map_embed_code}
+      <div class="col-md-5 unstyled-links">
+        {if content:header}
+        <h2 class="text-uppercase mb-1">{content:header}</h2>
+        {/if}
+        {content:description}
+        {if content:map_embed_code}
+        <div class="map d-block d-md-inline-flex">
+          {content:map_embed_code}
+        </div>
+        {/if}
+      </div>
+      {/if}
+      <div class="col-md-7 mt-4 mt-5">
+        {embed="forms/index" form_name="{content:form:value}"}
+      </div>
+      {/content}
+    </div>
+  </div>
+</section>
+{/page_content:contact_section}
+
+
 {page_content:form}
   {embed="forms/{content:value}"}
+  {embed="forms/index" form_name="{content:value}"}
 {/page_content:form}
 
 {!-- <!-- DEFAULT FIELDS --> --}

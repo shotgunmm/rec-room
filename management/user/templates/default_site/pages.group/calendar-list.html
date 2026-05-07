@@ -1,0 +1,13 @@
+<div class="day-event">
+  {exp:event_calendar:events_list
+    single="yes"
+    recurring="yes"
+    status="open"
+    category="{embed:event_category}"
+  }
+    <div class="on-day d-flex align-items-center">
+      <div class="num d-flex align-items-center justify-content-center">{start_time format="%j"}</div>
+      <div class="name">{title}</div>
+    </div>
+  {/exp:event_calendar:events_list}
+</div>

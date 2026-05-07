@@ -88,6 +88,28 @@
 		.event-day {
 			color: $orange;
 		}
+
+		.day[data-active] {
+			isolation: isolate;
+			position: relative;
+
+			&:not([data-today]) {
+				color: $orange;
+			}
+
+			&:before {
+				border: 2px solid $orange;
+				border-radius: 50%;
+				content: '';
+				height: 44px;
+				left: 50%;
+				position: absolute;
+				top: 50%;
+				transform: translate(-50%, -50%);
+				width: 44px;
+				z-index: -1;
+			}
+		}
 	}
 
 	.meta-calendar {
@@ -113,6 +135,7 @@
 	.nav-months {
 		.month {
 			color: $orange;
+			cursor: pointer;
 			font: 700 20px $pub;
 		}
 	}

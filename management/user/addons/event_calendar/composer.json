@@ -1,0 +1,14 @@
+{
+    "name": "propagate/event-calendar",
+    "description": "Event calendar add-on for ExpressionEngine 7",
+    "type": "ee-addon",
+    "require": {
+        "php": ">=8.3",
+        "sabre/vobject": "^4.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Propagate\\EventCalendar\\": ""
+        }
+    }
+}

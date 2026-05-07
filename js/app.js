@@ -29,7 +29,7 @@ function navToggle() {
 }
 
 function eventCollapse() {
-	$('.event-collapse .more').on('click', function () {
+	$(document).on('click', '.event-collapse .more', function () {
 		var $eventCollapse = $(this).closest('.event-collapse');
 		var $icon = $(this).find('.icon');
 

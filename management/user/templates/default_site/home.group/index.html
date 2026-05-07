@@ -4,49 +4,37 @@
 {exp:channel:entries channel="home"}
 
 {!-- HERO SECTION with Band Schedule Sidebar --}
+{homepage_banner}
 <section class="hero hero-home">
 	<div class="container-fluid gx-0">
 		<div class="row gx-0">
-			{banner_image}
 			<div class="col-md-8">
 				<div class="hero-slider">
-					{banner_image:image}
+					{homepage_banner:image}
 					<img class="img-fluid" src="{url}" alt="{description}" />
-					{/banner_image:image}
+					{/homepage_banner:image}
 				</div>
 			</div>
-			{/banner_image}
 			<div class="col-md-4 legend p-4 p-lg-5 text-uppercase">
-				<p class="month mb-1">MARCH</p>
-				<p class="punch mb-0"><strong class="d-block">LIVE BAND</strong> SCHEDULE</p>
-				<p class="day">(SATURDAYS)</p>
-				<div class="day-event">
-					<div class="on-day d-flex align-items-center">
-						<div class="num d-flex align-items-center justify-content-center">2</div>
-						<div class="name">Naked Bull</div>
-					</div>
-					<div class="on-day d-flex align-items-center">
-						<div class="num d-flex align-items-center justify-content-center">9</div>
-						<div class="name">The Pitfalls</div>
-					</div>
-					<div class="on-day d-flex align-items-center">
-						<div class="num d-flex align-items-center justify-content-center">16</div>
-						<div class="name">Wut It Iz</div>
-					</div>
-					<div class="on-day d-flex align-items-center">
-						<div class="num d-flex align-items-center justify-content-center">23</div>
-						<div class="name">THE CASTAWAYS</div>
-					</div>
-					<div class="on-day d-flex align-items-center">
-						<div class="num d-flex align-items-center justify-content-center">30</div>
-						<div class="name">Target Practice</div>
-					</div>
-				</div>
-				<a class="more d-inline-flex text-decoration-none" href="#">LEARN MORE <i class="bi bi-chevron-right"></i></a>
+				<p class="month mb-1">{exp:event_calendar:upcoming_months limit="5" single="yes" recurring="yes" status="open" category="{homepage_banner:event_category:value}" separator=" / "}</p>
+				<p class="punch mb-0"><strong class="d-block">{homepage_banner:event_category:label}</strong> SCHEDULE</p>
+				{if homepage_banner:header_note}
+				<p class="day">{homepage_banner:header_note}</p>
+				{/if}
+				{if "{homepage_banner:event_category:value}" != ""}
+					{embed="pages/calendar-list" event_category="{homepage_banner:event_category:value}"}
+				{/if}
+
+				{if homepage_banner:link_text && homepage_banner:link_url}
+				<a class="more d-inline-flex text-decoration-none" href="{homepage_banner:link_url}">
+					{homepage_banner:link_text} <i class="bi bi-chevron-right"></i>
+				</a>
+				{/if}
 			</div>
 		</div>
 	</div>
 </section>
+{/homepage_banner}
 
 {!-- PAGE CONTENT (Fluid Field Blocks) --}
 {page_content}
