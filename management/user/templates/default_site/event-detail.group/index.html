@@ -1,0 +1,49 @@
+{head}
+{navigation}
+
+{exp:event_calendar:event_detail}
+
+<section class="event-details sec fade-in {if banner_image}pb-5{if:else}py-5{/if}">
+  <div class="container">
+
+    {if banner_image}
+    <div class="hero-img hero-img-full">
+      <img src="{banner_image}" alt="{title}" loading="lazy" />
+    </div>
+    {/if}
+
+    <p class="mt-4"><a href="{calendar_page_url}" onclick="if(history.length>1){history.back();return false;}">&larr; Back to Calendar</a></p>
+
+    <h1>{title}</h1>
+
+    <p class="date mb-1">{day_of_week}</p>
+    <p class="date mb-1">{start_date}</p>
+    <p class="mb-3">{start_time} &ndash; {end_time}</p>
+
+    {if location}
+    <p class="mb-3"><strong>Location:</strong> {location}</p>
+    {/if}
+
+    {!-- <!-- {if short_description}
+    <div class="mt-5">
+      <h3>Short Description</h3>
+      {short_description}
+    </div>
+    {/if} --> --}
+
+    {if event_details}
+    <div class="mt-5">
+      <h3>Event Details</h3>
+      {event_details}
+    </div>
+    {/if}
+
+    {if event_url}
+    <p class="mt-3"><a class="cta" href="{event_url}">More Info</a></p>
+    {/if}
+
+  </div>
+</section>
+{/exp:event_calendar:event_detail}
+
+{footer}

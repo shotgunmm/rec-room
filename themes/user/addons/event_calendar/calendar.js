@@ -8,13 +8,18 @@
     // Constants
     // -------------------------------------------------------------------------
 
+    var DAY_NAMES = [
+        'Sunday', 'Monday', 'Tuesday', 'Wednesday',
+        'Thursday', 'Friday', 'Saturday'
+    ];
+
     var MONTH_NAMES = [
         'January', 'February', 'March', 'April', 'May', 'June',
         'July', 'August', 'September', 'October', 'November', 'December'
     ];
 
     // -------------------------------------------------------------------------
-    // Date utilities
+    // Date utilities -- no Date objects used for comparison or grid building
     // -------------------------------------------------------------------------
 
     function isLeapYear(year) {
@@ -28,6 +33,7 @@
     }
 
     // Day of week (0=Sun..6=Sat) via Tomohiko Sakamoto's algorithm
+    // No Date objects -- pure integer arithmetic
     function dayOfWeek(year, month, day) {
         var t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
         var y = year;
@@ -35,7 +41,9 @@
         return (y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + t[month - 1] + day) % 7;
     }
 
-    function padTwo(n) { return n < 10 ? '0' + n : String(n); }
+    function padTwo(n) {
+        return n < 10 ? '0' + n : String(n);
+    }
 
     function toDateKey(year, month, day) {
         return year + '-' + padTwo(month) + '-' + padTwo(day);
@@ -50,26 +58,31 @@
     }
 
     function prevMonth(year, month) {
-        return month === 1 ? { year: year - 1, month: 12 } : { year: year, month: month - 1 };
+        return month === 1
+            ? { year: year - 1, month: 12 }
+            : { year: year,     month: month - 1 };
     }
 
     function nextMonth(year, month) {
-        return month === 12 ? { year: year + 1, month: 1 } : { year: year, month: month + 1 };
+        return month === 12
+            ? { year: year + 1, month: 1 }
+            : { year: year,     month: month + 1 };
     }
 
+    // Ordinal suffix: 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 4 -> "4th"
     function ordinal(n) {
         var s = ['th', 'st', 'nd', 'rd'];
         var v = n % 100;
         return n + (s[(v - 20) % 10] || s[v] || s[0]);
     }
 
+    // Extract time portion from "Month Day, Year - H:MM AM" format
     function extractTime(datetimeStr) {
         var idx = datetimeStr.lastIndexOf(' - ');
         return idx !== -1 ? datetimeStr.substring(idx + 3) : datetimeStr;
     }
 
-    var DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-
+    // Build the date+time range line for an event-collapse row
     function formatDateLabel(dateKey) {
         var parts = dateKey.split('-');
         var year  = parseInt(parts[0], 10);
@@ -97,11 +110,12 @@
         nonce:     CalendarData.nonce,
         today:     CalendarData.today,
         single:    CalendarData.single    || 'yes',
-        recurring: CalendarData.recurring || 'yes'
+        recurring: CalendarData.recurring || 'yes',
+        status:    CalendarData.status    || 'open'
     };
 
     // -------------------------------------------------------------------------
-    // Filtering
+    // Client-side filtering
     // -------------------------------------------------------------------------
 
     function filterEvents(events) {
@@ -113,7 +127,17 @@
     }
 
     // -------------------------------------------------------------------------
-    // Grid rendering
+    // Event lookup
+    // -------------------------------------------------------------------------
+
+    function getEventsForDate(dateKey) {
+        return filterEvents(state.events).filter(function (ev) {
+            return ev.date_key === dateKey;
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // Mini calendar grid rendering
     // -------------------------------------------------------------------------
 
     function renderGrid(gridEl, year, month) {
@@ -129,11 +153,11 @@
         for (var p = firstDow - 1; p >= 0; p--) {
             var d    = prevDim - p;
             var cell = document.createElement('div');
-            cell.className           = 'day faded';
-            cell.dataset.calendarDay = '';
-            cell.dataset.date        = toDateKey(prev.year, prev.month, d);
-            cell.dataset.otherMonth  = '';
-            cell.textContent         = d;
+            cell.className            = 'day faded';
+            cell.dataset.calendarDay  = '';
+            cell.dataset.date         = toDateKey(prev.year, prev.month, d);
+            cell.dataset.otherMonth   = '';
+            cell.textContent          = d;
             gridEl.appendChild(cell);
         }
 
@@ -152,7 +176,10 @@
 
             var hasEvent = false;
             for (var i = 0; i < filtered.length; i++) {
-                if (filtered[i].date_key === dateKey) { hasEvent = true; break; }
+                if (filtered[i].date_key === dateKey) {
+                    hasEvent = true;
+                    break;
+                }
             }
             if (hasEvent) {
                 cell.dataset.hasEvents = '';
@@ -176,17 +203,30 @@
         }
     }
 
+    function eventDetailUrl(ev) {
+        var base = CalendarData.detail_url;
+        if (!base || !ev.slug) return '';
+        var url = CalendarData.url_style === 'index'
+            ? base + '/index/' + ev.slug
+            : base + '/' + ev.slug;
+        if (ev.event_type === 'recurring') url += '/' + ev.date_key;
+        return url;
+    }
+
     function renderDetails(detailsEl, dateKey) {
-        var events = filterEvents(state.events).filter(function (ev) {
-            return ev.date_key === dateKey;
-        });
+        var events = getEventsForDate(dateKey);
         if (events.length > 0) {
             var html = '';
             events.forEach(function (ev) {
+                var url       = eventDetailUrl(ev);
+                var titleHtml = url
+                    ? '<a href="' + url + '">' + ev.title + '</a>'
+                    : ev.title;
                 html += '<div data-calendar-event>'
-                    + '<h3>' + ev.title + '</h3>'
+                    + '<h3>' + titleHtml + '</h3>'
                     + '<p>' + ev.start_time + ' – ' + ev.end_time + '</p>'
-                    + ev.description
+                    + ev.short_description
+                    + (url ? '<p><a class="cta" href="' + url + '">Learn More</a></p>' : '')
                     + '</div>';
             });
             detailsEl.innerHTML = html;
@@ -199,14 +239,27 @@
         detailsEl.innerHTML = '<p>' + (CalendarData.ajax_error || 'Unable to load events. Please try again.') + '</p>';
     }
 
+    function updateMonthLabel(labelEl, year, month) {
+        labelEl.textContent = monthLabel(year, month);
+    }
+
+    function clearActive(calendar) {
+        var cells = calendar.querySelectorAll('[data-calendar-day]');
+        for (var i = 0; i < cells.length; i++) {
+            delete cells[i].dataset.active;
+        }
+    }
+
     // -------------------------------------------------------------------------
-    // Event list rendering
+    // Event list rendering (section.month-events)
     // -------------------------------------------------------------------------
 
     function renderEventList(listEl, events) {
         if (!listEl) return;
 
         var filtered = filterEvents(events);
+
+        // Sort by date_key then start_time_raw
         filtered.sort(function (a, b) {
             if (a.date_key < b.date_key) return -1;
             if (a.date_key > b.date_key) return  1;
@@ -219,34 +272,41 @@
         }
 
         var html = '';
-        filtered.forEach(function (ev, i) {
-            var dayNum  = parseInt(ev.date_key.substr(8, 2), 10);
-            var isFirst = i === 0;
+        filtered.forEach(function (ev) {
+            var dayNum = parseInt(ev.date_key.substr(8, 2), 10);
+            var url    = eventDetailUrl(ev);
 
-            html += '<div class="event-collapse' + (isFirst ? ' clicked' : '') + '"'
-                + ' data-event-date="' + ev.date_key + '">';
+            html += '<div class="event-collapse" data-event-date="' + ev.date_key + '">';
+
             html += '<div class="event-head d-flex">';
-            html += '<div class="date d-flex justify-content-center align-items-center">' + dayNum + '</div>';
-            html += '<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center flex-grow-1">';
+            html += '<div class="date d-flex justify-content-center align-items-center">'
+                + dayNum + '</div>';
+            html += '<div class="d-flex flex-column flex-md-row justify-content-between'
+                + ' align-items-md-center flex-grow-1">';
             html += '<div class="copy">';
             html += '<h2>' + ev.title + '</h2>';
             html += '<p>' + formatEventDateLine(ev) + '</p>';
             html += '</div>';
-            html += '<div class="more d-flex align-items-center mt-3 mt-md-0">Learn More<span class="icon ms-1">' + (isFirst ? '-' : '+') + '</span></div>';
+            html += '<div class="more d-flex align-items-center mt-3 mt-md-0">'
+                + 'Learn More<span class="icon ms-1">+</span></div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="event-content"><div class="text">';
+            if (ev.short_description) {
+                html += '<h2>About</h2>' + ev.short_description;
+            }
+            if (url) {
+                html += '<p><a class="cta d-inline-flex align-items-center justify-content-center rounded-3 py-2 px-4 text-uppercase text-decoration-none" href="' + url + '">View Full Details</a></p>';
+            }
             html += '</div></div>';
-            html += '<div class="event-content"' + (isFirst ? ' style="display:block"' : '') + '>';
-            html += '<div class="text">';
-            if (ev.description) { html += '<h2>About</h2>' + ev.description; }
-            html += '</div></div></div>';
+            html += '</div>';
         });
 
         listEl.innerHTML = html;
     }
 
-    // -------------------------------------------------------------------------
-    // Nav label update — all matching elements
-    // -------------------------------------------------------------------------
-
+    // Update the nav-months labels (prev / current / next) — all matching elements
     function updateNavLabels(year, month) {
         var prev = prevMonth(year, month);
         var next = nextMonth(year, month);
@@ -267,26 +327,6 @@
         });
     }
 
-    function scrollToEvent(dateKey) {
-        var listEl = document.querySelector('[data-calendar-event-list]');
-        if (!listEl) return;
-        var target = listEl.querySelector('[data-event-date="' + dateKey + '"]');
-        if (!target) return;
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        if (!target.classList.contains('clicked')) {
-            var moreBtn = target.querySelector('.more');
-            if (moreBtn) {
-                moreBtn.click();
-            } else {
-                target.classList.add('clicked');
-                var content = target.querySelector('.event-content');
-                var icon    = target.querySelector('.icon');
-                if (content) content.style.display = 'block';
-                if (icon)    icon.textContent = '-';
-            }
-        }
-    }
-
     // -------------------------------------------------------------------------
     // Circle text
     // -------------------------------------------------------------------------
@@ -305,9 +345,11 @@
         }
         var html = '<div class="head mb-3"><h2>' + formatDateLabel(dateKey) + '</h2></div>';
         events.forEach(function (ev) {
-            html += '<p class="mb-0"><strong>' + ev.title + '</strong><br>'
+            var url = eventDetailUrl(ev);
+            html += '<p><strong>' + ev.title + '</strong><br>'
                 + extractTime(ev.start_time) + ' – ' + extractTime(ev.end_time) + '</p>'
-                + (ev.description ? ev.description : '');
+                + (ev.short_description ? ev.short_description : '')
+                + (url ? '<a class="cta mt-3 d-inline-block" href="' + url + '">See Details</a>' : '');
         });
         circleTextEl.innerHTML = html;
     }
@@ -321,48 +363,15 @@
     // -------------------------------------------------------------------------
 
     function onDayClick(cell, calendar) {
-        calendar.querySelectorAll('[data-calendar-day]').forEach(function (c) {
-            delete c.dataset.active;
-        });
+        clearActive(calendar);
         cell.dataset.active = '';
 
         var detailsEl = calendar.querySelector('[data-calendar-details]');
-        if (detailsEl) renderDetails(detailsEl, cell.dataset.date);
+        if (detailsEl) {
+            renderDetails(detailsEl, cell.dataset.date);
+        }
 
         renderCircleText(cell.dataset.date);
-    }
-
-    // -------------------------------------------------------------------------
-    // AJAX
-    // -------------------------------------------------------------------------
-
-    function setLoading(calendars, loading) {
-        calendars.forEach(function (cal) {
-            if (loading) { cal.dataset.loading = ''; } else { delete cal.dataset.loading; }
-        });
-    }
-
-    function fetchMonth(month, onSuccess, onError) {
-        var calendars = Array.from(document.querySelectorAll('[data-calendar]'));
-        setLoading(calendars, true);
-
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', state.fetchUrl, true);
-        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-        xhr.setRequestHeader('X-Calendar-Nonce', state.nonce);
-
-        xhr.onload = function () {
-            setLoading(calendars, false);
-            if (xhr.status === 200) {
-                try {
-                    var data = JSON.parse(xhr.responseText);
-                    if (data.success) { onSuccess(data.events); } else { onError(); }
-                } catch (ex) { onError(); }
-            } else { onError(); }
-        };
-
-        xhr.onerror = function () { setLoading(calendars, false); onError(); };
-        xhr.send('month=' + encodeURIComponent(month));
     }
 
     function onNavClick(calendar, direction) {
@@ -382,6 +391,7 @@
                 state.year   = nm.year;
                 state.month  = nm.month;
                 state.events = events;
+
                 renderGrid(gridEl, state.year, state.month);
                 if (detailsEl) detailsEl.innerHTML = '';
                 updateNavLabels(state.year, state.month);
@@ -392,6 +402,7 @@
                 state.year   = nm.year;
                 state.month  = nm.month;
                 state.events = [];
+
                 renderGrid(gridEl, state.year, state.month);
                 if (detailsEl) renderError(detailsEl);
                 updateNavLabels(state.year, state.month);
@@ -399,6 +410,55 @@
                 restoreCircleText();
             }
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // AJAX
+    // -------------------------------------------------------------------------
+
+    function setLoading(calendars, loading) {
+        for (var i = 0; i < calendars.length; i++) {
+            if (loading) {
+                calendars[i].dataset.loading = '';
+            } else {
+                delete calendars[i].dataset.loading;
+            }
+        }
+    }
+
+    function fetchMonth(month, onSuccess, onError) {
+        var calendars = document.querySelectorAll('[data-calendar]');
+        setLoading(calendars, true);
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', state.fetchUrl, true);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.setRequestHeader('X-Calendar-Nonce', state.nonce);
+
+        xhr.onload = function () {
+            setLoading(calendars, false);
+            if (xhr.status === 200) {
+                try {
+                    var data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        onSuccess(data.events);
+                    } else {
+                        onError();
+                    }
+                } catch (ex) {
+                    onError();
+                }
+            } else {
+                onError();
+            }
+        };
+
+        xhr.onerror = function () {
+            setLoading(calendars, false);
+            onError();
+        };
+
+        xhr.send('month=' + encodeURIComponent(month));
     }
 
     // -------------------------------------------------------------------------
@@ -415,24 +475,26 @@
         updateNavLabels(state.year, state.month);
         // Initial list is server-rendered; renderEventList fires only on navigation.
 
-        calendars.forEach(function (calendar) {
-            var gridEl = calendar.querySelector('[data-calendar-grid]');
+        for (var i = 0; i < calendars.length; i++) {
+            (function (calendar) {
+                var gridEl = calendar.querySelector('[data-calendar-grid]');
 
-            if (!gridEl) return;
+                if (!gridEl) return;
 
-            gridEl.addEventListener('click', function (e) {
-                var cell = e.target.closest('[data-calendar-day]');
-                if (!cell || 'otherMonth' in cell.dataset) return;
-                onDayClick(cell, calendar);
-            });
+                gridEl.addEventListener('click', function (e) {
+                    var cell = e.target.closest('[data-calendar-day]');
+                    if (!cell || 'otherMonth' in cell.dataset) return;
+                    onDayClick(cell, calendar);
+                });
 
-            document.querySelectorAll('[data-calendar-nav-prev]').forEach(function (btn) {
-                btn.addEventListener('click', function () { onNavClick(calendar, 'prev'); });
-            });
-            document.querySelectorAll('[data-calendar-nav-next]').forEach(function (btn) {
-                btn.addEventListener('click', function () { onNavClick(calendar, 'next'); });
-            });
-        });
+                document.querySelectorAll('[data-calendar-nav-prev]').forEach(function (btn) {
+                    btn.addEventListener('click', function () { onNavClick(calendar, 'prev'); });
+                });
+                document.querySelectorAll('[data-calendar-nav-next]').forEach(function (btn) {
+                    btn.addEventListener('click', function () { onNavClick(calendar, 'next'); });
+                });
+            }(calendars[i]));
+        }
     });
 
 }());

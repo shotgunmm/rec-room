@@ -4,7 +4,11 @@
  *
  * @var array  $errors          Validation error strings
  * @var string $title           Pre-filled title (htmlspecialchars'd)
- * @var string $description     Pre-filled description (htmlspecialchars'd)
+ * @var string $slug            Pre-filled slug (htmlspecialchars'd)
+ * @var string $short_description_field   Rendered EE Rich Text Editor field HTML
+ * @var string $event_details_field   Rendered EE Rich Text Editor field HTML
+ * @var string $url             Pre-filled link URL (htmlspecialchars'd)
+ * @var string $banner_image_field   Rendered EE drag-and-drop file field HTML
  * @var string $day_of_week     Selected day of week (0-6 string)
  * @var string $start_time      Pre-filled start time (htmlspecialchars'd)
  * @var string $end_time        Pre-filled end time (htmlspecialchars'd)
@@ -13,6 +17,7 @@
  * @var array  $all_categories  Available categories [{cat_id, cat_name, cat_url_title}]
  * @var array  $days_options    Array of day_of_week int => label string
  * @var object $form_url        CP/URL object
+ * @var array  $name_badges     field_name => rendered copyable "{field_name}" badge HTML
  */
 ?>
 <?php if (!empty($errors)): ?>
@@ -33,6 +38,7 @@
     <fieldset class="fieldset-required">
         <div class="field-instruct">
             <label><?= lang('title') ?></label>
+            <?= $name_badges['title'] ?? '' ?>
         </div>
         <div class="field-control">
             <input type="text" name="title" value="<?= $title ?>" maxlength="255">
@@ -41,16 +47,19 @@
 
     <fieldset>
         <div class="field-instruct">
-            <label><?= lang('description') ?></label>
+            <label><?= lang('slug') ?></label>
+            <?= $name_badges['slug'] ?? '' ?>
+            <em><?= lang('slug_hint') ?></em>
         </div>
         <div class="field-control">
-            <textarea name="description"><?= $description ?></textarea>
+            <input type="text" name="slug" value="<?= $slug ?>" maxlength="255" placeholder="auto-generated from title if left blank">
         </div>
     </fieldset>
 
     <fieldset class="fieldset-required">
         <div class="field-instruct">
             <label><?= lang('day_of_week') ?></label>
+            <?= $name_badges['day_of_week'] ?? '' ?>
         </div>
         <div class="field-control">
             <select name="day_of_week">
@@ -65,6 +74,7 @@
     <fieldset class="fieldset-required">
         <div class="field-instruct">
             <label><?= lang('start_time') ?></label>
+            <?= $name_badges['start_time'] ?? '' ?>
         </div>
         <div class="field-control">
             <input type="time" name="start_time" value="<?= $start_time ?>">
@@ -74,6 +84,7 @@
     <fieldset class="fieldset-required">
         <div class="field-instruct">
             <label><?= lang('end_time') ?></label>
+            <?= $name_badges['end_time'] ?? '' ?>
         </div>
         <div class="field-control">
             <input type="time" name="end_time" value="<?= $end_time ?>">
@@ -83,6 +94,7 @@
     <fieldset>
         <div class="field-instruct">
             <label><?= lang('status') ?></label>
+            <?= $name_badges['status'] ?? '' ?>
         </div>
         <div class="field-control">
             <select name="status">
@@ -94,7 +106,50 @@
 
     <fieldset>
         <div class="field-instruct">
+            <label><?= lang('banner_image') ?></label>
+            <?= $name_badges['banner_image'] ?? '' ?>
+        </div>
+        <div class="field-control">
+            <?= $banner_image_field ?>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <div class="field-instruct">
+            <label><?= lang('short_description') ?></label>
+            <?= $name_badges['short_description'] ?? '' ?>
+        </div>
+        <div class="field-control">
+            <?= $short_description_field ?>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <div class="field-instruct">
+            <label><?= lang('event_details') ?></label>
+            <?= $name_badges['event_details'] ?? '' ?>
+            <em><?= lang('event_details_hint') ?></em>
+        </div>
+        <div class="field-control">
+            <?= $event_details_field ?>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <div class="field-instruct">
+            <label><?= lang('event_link') ?></label>
+            <?= $name_badges['url'] ?? '' ?>
+            <em><?= lang('event_link_hint') ?></em>
+        </div>
+        <div class="field-control">
+            <input type="text" name="url" value="<?= $url ?>" maxlength="512">
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <div class="field-instruct">
             <label><?= lang('categories') ?></label>
+            <?= $name_badges['category_ids'] ?? '' ?>
         </div>
         <div class="field-control">
             <?php if (empty($all_categories)): ?>
@@ -111,7 +166,7 @@
     </fieldset>
 
     <div class="form-btns">
-        <input type="submit" name="submit" value="<?= lang('save') ?>" class="button button--primary" data-submit-text="<?= lang('save') ?>" data-work-text="<?= lang('btn_saving') ?>">
+        <input type="submit" name="submit" value="<?= lang('save') ?>" class="button button--primary" data-submit-text="<?= lang('save') ?>" data-work-text="<?= lang('btn_saving') ?>" data-shortcut="s">
         <a href="<?= htmlspecialchars(ee('CP/URL')->make('addons/settings/event_calendar')->compile()) ?>" class="button button--default">
             <?= lang('cancel') ?>
         </a>

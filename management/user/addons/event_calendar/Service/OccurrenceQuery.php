@@ -29,7 +29,7 @@ class OccurrenceQuery
      *       'event_id'    => int,
      *       'title'       => string,
      *       'slug'        => string,
-     *       'description' => string,
+     *       'short_description' => string,
      *       'location'    => string,
      *       'url'         => string,
      *       'start_time'  => int (UTC),

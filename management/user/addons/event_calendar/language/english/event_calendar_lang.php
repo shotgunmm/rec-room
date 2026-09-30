@@ -22,7 +22,9 @@ $lang = [
     'actions'                 => 'Actions',
 
     // Form labels
-    'description'             => 'Description',
+    'short_description'       => 'Short Description',
+    'event_details'           => 'Event Details',
+    'event_details_hint'      => 'Full details for the event page. Supports rich text formatting.',
     'day_of_week'             => 'Day of Week',
     'open_date'               => 'Start Date',
     'expiration_date'         => 'End Date',
@@ -104,8 +106,15 @@ $lang = [
     // New event fields (v2.0)
     'location'                   => 'Location',
     'event_url'                  => 'URL',
+    'banner_image'               => 'Banner Image',
+    'banner_image_hint'          => '',
+    'choose_file'                => 'Choose File',
+    'event_link'                 => 'Link URL',
+    'event_link_hint'            => 'Link for this event (e.g. tickets, registration). Use a full URL (https://…) or a relative path (/page).',
+    'invalid_url'                => 'Link URL must be a full URL (https://example.com) or a relative path starting with /.',
     'all_day'                    => 'All day',
     'slug'                       => 'URL Slug',
+    'slug_hint'                  => 'Used in the event URL. Leave blank to auto-generate from the title. Lowercase letters, numbers, and hyphens only.',
     'recurrence'                 => 'Recurrence',
     'no_recurrence'              => 'Does not repeat',
 
@@ -127,6 +136,16 @@ $lang = [
     // Settings / sidebar
     'settings'                   => 'Settings',
     'templates'                  => 'Templates',
+    'page_settings'              => 'Settings',
+    'settings_saved'             => 'Settings saved.',
+    'calendar_page_url_label'    => 'Calendar Page URL',
+    'calendar_page_url_desc'     => 'Fallback URL for the &ldquo;Back to Calendar&rdquo; link on event detail pages.',
+    'calendar_page_url_invalid'  => 'Calendar page URL must be a valid URL or a path starting with /.',
+    'url_style_label'            => 'Event Detail URL Style',
+    'url_style_clean'            => 'Clean URLs &mdash; <code>/event-detail/{slug}</code>',
+    'url_style_clean_desc'       => 'Requires <code>strict_urls = n</code> in EE config (set automatically).',
+    'url_style_index'            => 'Classic/Strict URLs &mdash; <code>/event-detail/index/{slug}</code>',
+    'url_style_index_desc'       => 'Compatible with <code>strict_urls = y</code>. No config change needed.',
 
     // Template reference page
     'copy'                       => 'Copy',

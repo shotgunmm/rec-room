@@ -137,6 +137,10 @@
 			color: $orange;
 			cursor: pointer;
 			font: 700 20px $pub;
+
+			&.current {
+				font-weight: 900;
+			}
 		}
 	}
 
@@ -182,6 +186,7 @@
 
 			.more {
 				color: $orange;
+				text-decoration: none;
 				cursor: pointer;
 				font: 700 18px/1 $pub;
 				letter-spacing: 0.06em;
@@ -211,8 +216,12 @@
 				}
 
 				a {
-					color: inherit;
+					color: $orange;
 					text-decoration: none;
+
+					&.cta {
+						color: inherit;
+					}
 				}
 			}
 		}

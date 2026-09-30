@@ -121,4 +121,10 @@
 		color: $white;
 		letter-spacing: normal;
 	}
+
+	.cta {
+		&:hover {
+			background-color: rgba($blue, 0.5);
+		}
+	}
 }

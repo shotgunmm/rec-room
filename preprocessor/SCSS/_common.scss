@@ -106,6 +106,12 @@
 	p {
 		color: $white;
 	}
+
+	.cta {
+		&:hover {
+			background-color: rgba($blue, 0.5);
+		}
+	}
 }
 
 .unstyled-links {
@@ -113,4 +119,8 @@
 		text-decoration: none;
 		color: inherit;
 	}
+}
+
+.color-inherit {
+	color: inherit !important;
 }

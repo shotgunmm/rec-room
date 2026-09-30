@@ -12,6 +12,20 @@ class Form_builder
     private $action_id = null;
     private $settings = array();
 
+    const MAILCHIMP_FAILURE_STATUSES = array(
+        'failed',
+        'failed_rate_limit',
+        'failed_invalid_email',
+        'failed_permanently_deleted',
+        'skipped_misconfigured'
+    );
+
+    const MAILCHIMP_SUCCESS_STATUSES = array(
+        'subscribed',
+        'updated',
+        'reactivated'
+    );
+
     public function __construct()
     {
         $this->site_id = ee()->config->item('site_id');
@@ -84,6 +98,11 @@ class Form_builder
 
         $action_url = ee()->functions->fetch_site_index() . QUERY_MARKER . 'ACT=' . $this->action_id;
 
+        // Fetch flash data before building fields so old values can repopulate inputs
+        $flash_errors = ee()->session->flashdata('form_builder_errors_' . $form['form_id']);
+        $flash_old    = ee()->session->flashdata('form_builder_old_'    . $form['form_id']);
+        file_put_contents('/tmp/fb_debug.txt', date('H:i:s') . ' FORM LOAD form_id=' . $form['form_id'] . ' flash_errors=' . ($flash_errors ? json_encode(array_keys($flash_errors)) : 'none') . "\n", FILE_APPEND);
+
         // Build field variables
         $field_vars = array();
         $has_file = false;
@@ -104,17 +123,24 @@ class Form_builder
                 'default_value' => $field['default_value'],
                 'css_class' => $field['css_class'],
                 'field_class' => $field['css_class'],
-                'field_html' => $this->renderFieldHtml($field),
-                'field_options' => $this->parseOptions($field['field_options'])
+                'field_html' => $this->renderFieldHtml($field, $flash_old ?: array(), $flash_errors ?: array()),
+                'field_options' => self::parseOptions($field['field_options'])
             );
         }
 
-        // Check for errors in flash data
-        $flash_errors = ee()->session->flashdata('form_builder_errors_' . $form['form_id']);
-        $flash_old    = ee()->session->flashdata('form_builder_old_'    . $form['form_id']);
-
         $has_errors = !empty($flash_errors);
         $error_list = $flash_errors ?: array();
+
+        $errors_html = '';
+        if ($has_errors && !empty($error_list)) {
+            $messages = array();
+            foreach ($error_list as $msg) {
+                $messages[] = '<li>' . htmlspecialchars($msg, ENT_QUOTES) . '</li>';
+            }
+            $errors_html = '<div class="alert alert-danger" role="alert">'
+                . '<ul style="margin:0;padding-left:1.25em;">' . implode('', $messages) . '</ul>'
+                . '</div>';
+        }
 
         // Parse template variables
         $vars = array(
@@ -123,7 +149,7 @@ class Form_builder
             'form_label' => $form['form_label'],
             'action_url' => $action_url,
             'has_errors' => $has_errors,
-            'errors' => $error_list,
+            'errors_html' => $errors_html,
             'fields' => $field_vars,
             'old' => $flash_old ?: array()
         );
@@ -142,9 +168,11 @@ class Form_builder
             $form_attrs['enctype'] = 'multipart/form-data';
         }
 
+        $form_attrs['novalidate'] = '';
+
         $attr_string = '';
         foreach ($form_attrs as $key => $val) {
-            $attr_string .= ' ' . $key . '="' . htmlspecialchars($val, ENT_QUOTES) . '"';
+            $attr_string .= ($val === '') ? ' ' . $key : ' ' . $key . '="' . htmlspecialchars($val, ENT_QUOTES) . '"';
         }
 
         // Build hidden fields
@@ -160,64 +188,6 @@ class Form_builder
         // Parse the tag content
         $tagdata = ee()->TMPL->tagdata;
         $output = ee()->TMPL->parse_variables($tagdata, array($vars));
-
-        // Client-side validation for required checkbox/radio groups (data-required="true")
-        $validation_script = '
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    var form = document.querySelector("form[action=\"' . addslashes($action_url) . '\"]");
-    if (!form) return;
-
-    function showFormError(msg) {
-        var errorDiv = form.querySelector(".form-error");
-        if (errorDiv) {
-            errorDiv.textContent = msg;
-            var wrapper = errorDiv.parentElement;
-            if (wrapper) wrapper.style.display = "";
-            errorDiv.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-    }
-
-    function clearFormError() {
-        var errorDiv = form.querySelector(".form-error");
-        if (errorDiv) {
-            errorDiv.textContent = "";
-            var wrapper = errorDiv.parentElement;
-            if (wrapper) wrapper.style.display = "none";
-        }
-    }
-
-    function validateGroups() {
-        var groups = form.querySelectorAll("[data-required=\"true\"]");
-        for (var i = 0; i < groups.length; i++) {
-            var group = groups[i];
-            var inputs = group.querySelectorAll("input[type=\"checkbox\"], input[type=\"radio\"]");
-            if (inputs.length === 0) continue;
-            var checked = false;
-            for (var j = 0; j < inputs.length; j++) {
-                if (inputs[j].checked) { checked = true; break; }
-            }
-            if (!checked) {
-                var label = group.getAttribute("data-label") || "This field";
-                showFormError(label + " is required.");
-                group.scrollIntoView({ behavior: "smooth", block: "center" });
-                return false;
-            }
-        }
-        return true;
-    }
-
-    form.addEventListener("submit", function (e) {
-        if (!validateGroups()) {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            return false;
-        }
-        clearFormError();
-    }, true);
-});
-</script>
-';
 
         // Load reCAPTCHA if enabled
         $recaptcha_script = '';
@@ -268,52 +238,226 @@ document.addEventListener("DOMContentLoaded", function () {
             $recaptcha_script .= '<noscript><p class="form-recaptcha-notice" style="color:#c0392b;margin-top:0.5em;">JavaScript is required to submit this form. Please enable JavaScript and try again.</p></noscript>';
         }
 
-        return '<form' . $attr_string . '>' . $hidden . $output . '</form>' . $validation_script . $recaptcha_script;
+        $form_selector = $id ? 'document.getElementById("' . addslashes($id) . '")' : 'document.querySelector("form[action=\"' . addslashes($action_url) . '\"]")';
+
+        $validation_script = '
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var form = ' . $form_selector . ';
+    if (!form) return;
+
+    function isVisible(el) {
+        return el.offsetParent !== null;
+    }
+
+    function addInlineError(container, message) {
+        var errorEl = document.createElement("div");
+        errorEl.className = "field-error-msg";
+        errorEl.style.cssText = "color:#dc3545;font-size:0.875em;margin-top:0.25rem;font-weight:bold;";
+        errorEl.textContent = message;
+        container.appendChild(errorEl);
+    }
+
+    function clearFieldError(inputEl, container) {
+        inputEl.style.border = "";
+        inputEl.style.outline = "";
+        inputEl.removeAttribute("data-field-invalid");
+        if (container) {
+            container.querySelectorAll(".field-error-msg").forEach(function(el) { el.remove(); });
+        }
+    }
+
+    // Validates a single field, clears and re-sets its error state. Returns true if valid.
+    function validateField(field) {
+        var radioControl, container, empty;
+
+        if (field.type === "radio") {
+            radioControl = field.closest(".form-control");
+            if (!radioControl) return true;
+            container = radioControl.parentNode;
+            clearFieldError(radioControl, container);
+            if (!form.querySelector("input[name=\'" + field.name + "\']:checked")) {
+                radioControl.style.border = "1px solid #dc3545";
+                radioControl.setAttribute("data-field-invalid", "1");
+                addInlineError(container, "This field is required.");
+                return false;
+            }
+            return true;
+        } else if (field.type === "checkbox") {
+            container = field.parentNode;
+            clearFieldError(field, container);
+            if (!field.checked) {
+                field.style.outline = "2px solid #dc3545";
+                field.setAttribute("data-field-invalid", "1");
+                addInlineError(container, "This field is required.");
+                return false;
+            }
+            return true;
+        } else {
+            container = field.parentNode;
+            clearFieldError(field, container);
+            empty = field.value === "" || (field.type === "number" && Number(field.value) === 0);
+            if (empty) {
+                if (!field.hasAttribute("required")) return true;
+                field.style.border = "1px solid #dc3545";
+                field.setAttribute("data-field-invalid", "1");
+                addInlineError(container, "This field is required.");
+                return false;
+            }
+            if (field.type === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(field.value)) {
+                field.style.border = "1px solid #dc3545";
+                field.setAttribute("data-field-invalid", "1");
+                addInlineError(container, "Please enter a valid email address.");
+                return false;
+            }
+            if (field.type === "url") {
+                try { new URL(field.value); } catch (e) {
+                    field.style.border = "1px solid #dc3545";
+                    field.setAttribute("data-field-invalid", "1");
+                    addInlineError(container, "Please enter a valid URL (e.g. https://example.com).");
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    // Blur / change listeners for real-time per-field validation
+    var seenBlurGroups = {};
+    form.querySelectorAll("[required], input[type=\"email\"], input[type=\"url\"]").forEach(function(field) {
+        if (field.type === "radio") {
+            if (seenBlurGroups[field.name]) return;
+            seenBlurGroups[field.name] = true;
+            form.querySelectorAll("input[name=\'" + field.name + "\']").forEach(function(radio) {
+                radio.addEventListener("change", function() { validateField(field); });
+            });
+        } else if (field.type === "file") {
+            field.addEventListener("change", function() { validateField(field); });
+        } else {
+            field.addEventListener("blur", function() { validateField(field); });
+        }
+    });
+
+    form.addEventListener("submit", function(e) {
+        var errorBox = form.querySelector(".form-error");
+        var hasError = false;
+        var firstErrorEl = null;
+        var seenSubmitGroups = {};
+
+        form.querySelectorAll("[required], input[type=\"email\"], input[type=\"url\"]").forEach(function(field) {
+            if (!isVisible(field)) return;
+            if (field.type === "radio") {
+                if (seenSubmitGroups[field.name]) return;
+                seenSubmitGroups[field.name] = true;
+            }
+            if (!validateField(field)) {
+                hasError = true;
+                if (!firstErrorEl) firstErrorEl = field;
+            }
+        });
+
+        form.querySelectorAll(".checkbox-group[data-required=\'true\']").forEach(function(group) {
+            if (!isVisible(group)) return;
+            var checked = Array.from(group.querySelectorAll("input[type=\'checkbox\']")).some(function(cb) { return cb.checked; });
+            if (!checked) {
+                hasError = true;
+                if (!firstErrorEl) firstErrorEl = group.querySelector("input");
+                addInlineError(group, "Please select at least one option.");
+            }
+        });
+
+        if (hasError) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            if (errorBox) {
+                if (errorBox.parentElement) errorBox.parentElement.style.display = "block";
+                errorBox.style.display = "block";
+                errorBox.textContent = "Please review all required fields before submitting.";
+            }
+            if (errorBox) errorBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        } else {
+            if (errorBox) {
+                errorBox.style.display = "none";
+                errorBox.textContent = "";
+            }
+        }
+    });
+});
+</script>
+';
+
+        $anchor_id = 'form-builder-' . $form['form_id'];
+
+        $scroll_script = $has_errors
+            ? '<script>document.addEventListener("DOMContentLoaded",function(){var el=document.getElementById("' . $anchor_id . '");if(el){window.scrollTo({top:el.getBoundingClientRect().top+window.pageYOffset-80,behavior:"smooth"});}});</script>'
+            : '';
+
+        $file_style = $has_file ? '<style>
+input[type="file"]::file-selector-button{display:none}
+input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
+</style>' : '';
+
+        return $file_style . '<div id="' . $anchor_id . '">'
+            . '<form' . $attr_string . '>' . $hidden . $output . '</form>'
+            . '</div>'
+            . $validation_script . $recaptcha_script . $scroll_script;
     }
 
     /**
      * Render HTML for a single field
      */
-    private function renderFieldHtml($field)
+    private function renderFieldHtml($field, $old = array(), $errors = array())
     {
         $name = htmlspecialchars($field['field_name'], ENT_QUOTES);
         $required = ($field['is_required'] === 'y') ? ' required' : '';
         $label_text = nl2br(htmlspecialchars($field['field_label'], ENT_QUOTES)) . ($field['is_required'] === 'y' ? ' <span class="red">*</span>' : '');
         $confirm = $field['confirm'];
-        $placeholder = htmlspecialchars($field['placeholder'] ?? '', ENT_QUOTES);
-        $raw_default = $field['default_value'] ?? '';
-        $default = htmlspecialchars($field['default_value'] ?? '', ENT_QUOTES);
-        $css_class = htmlspecialchars($field['css_class'] ?? '', ENT_QUOTES);
+        $placeholder = htmlspecialchars((string) ($field['placeholder'] ?? ''), ENT_QUOTES);
+        $raw_old = isset($old[$field['field_name']]) ? $old[$field['field_name']] : null;
+        $raw_default = $raw_old !== null ? $raw_old : ($field['default_value'] ?? '');
+        $default = htmlspecialchars((string) $raw_default, ENT_QUOTES);
+        $field_error = isset($errors[$field['field_name']]) ? $errors[$field['field_name']] : null;
+        $error_html = $field_error
+            ? '<div class="field-error-msg" style="color:#dc3545;font-size:0.875em;margin-top:0.25rem;font-weight:bold;">' . htmlspecialchars($field_error, ENT_QUOTES) . '</div>'
+            : '';
+        $error_border = $field_error ? ' style="border-color:#dc3545;"' : '';
+        $css_class = htmlspecialchars((string) ($field['css_class'] ?? ''), ENT_QUOTES);
 
         switch ($field['field_type']) {
             case 'text':
                 $html = '<div class="' . $css_class . ' form-field">
                     <label class="form-label" for="' . $name . '">' . $label_text . '</label>
-                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="text" name="' . $name . '" ' . $required . ' />
-                    <div class="form-text">' . $placeholder . '</div>
+                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="text" name="' . $name . '" value="' . $default . '"' . ($placeholder !== '' ? ' placeholder="' . $placeholder . '"' : '') . ' ' . $required . $error_border . ' />
+                    ' . $error_html . '
                 </div>';
                 return $html;
 
             case 'number':
                 $html = '<div class="' . $css_class . ' form-field">
                     <label class="form-label" for="' . $name . '">' . $label_text . '</label>
-                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="number" name="' . $name . '" ' . $required . ' />
-                    <div class="form-text">' . $placeholder . '</div>
+                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="number" name="' . $name . '" value="' . $default . '"' . ($placeholder !== '' ? ' placeholder="' . $placeholder . '"' : '') . ' ' . $required . $error_border . ' />
+                    ' . $error_html . '
                 </div>';
                 return $html;
 
             case 'email':
+                $confirm_error_html = isset($errors[$field['field_name'] . '_confirm'])
+                    ? '<div class="field-error-msg" style="color:#dc3545;font-size:0.875em;margin-top:0.25rem;font-weight:bold;">' . htmlspecialchars($errors[$field['field_name'] . '_confirm'], ENT_QUOTES) . '</div>'
+                    : '';
+                $confirm_error_border = isset($errors[$field['field_name'] . '_confirm']) ? ' style="border-color:#dc3545;"' : '';
                 $html = '<div class="' . $css_class . ' form-field">
                     <label class="form-label" for="' . $name . '">' . $label_text . '</label>
-                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="email" name="' . $name . '" ' . $required . ' />
-                    <div class="form-text">' . $placeholder . '</div>
+                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="email" name="' . $name . '" value="' . $default . '"' . ($placeholder !== '' ? ' placeholder="' . $placeholder . '"' : '') . ' ' . $required . $error_border . ' />
+                    ' . $error_html . '
                 </div>';
                 if ($confirm === 'y') {
                     $confirm_label = lang('form_builder_confirm_email_label');
                     $confirm_name  = $name . '_confirm';
+                    $confirm_old   = htmlspecialchars(isset($old[$field['field_name'] . '_confirm']) ? $old[$field['field_name'] . '_confirm'] : '', ENT_QUOTES);
                     $html .= '<div class="' . $css_class . ' form-field">
                     <label class="form-label" for="' . $confirm_name . '">' . htmlspecialchars($confirm_label, ENT_QUOTES) . '</label>
-                    <input class="form-control" id="' . $confirm_name . '" data-label="' . htmlspecialchars($confirm_label, ENT_QUOTES) . '" type="email" name="' . $confirm_name . '" ' . $required . ' data-confirm-email="true" />
+                    <input class="form-control" id="' . $confirm_name . '" data-label="' . htmlspecialchars($confirm_label, ENT_QUOTES) . '" type="email" name="' . $confirm_name . '" value="' . $confirm_old . '" ' . $required . $confirm_error_border . ' data-confirm-email="true" />
+                    ' . $confirm_error_html . '
                     <div class="form-text">' . htmlspecialchars($confirm_label, ENT_QUOTES) . '</div>
                 </div>';
                 }
@@ -322,33 +466,34 @@ document.addEventListener("DOMContentLoaded", function () {
             case 'url':
                 $html = '<div class="' . $css_class . ' form-field">
                     <label class="form-label" for="' . $name . '">' . $label_text . '</label>
-                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="url" name="' . $name . '" ' . $required . ' />
-                    <div class="form-text">' . $placeholder . '</div>
+                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="url" name="' . $name . '" value="' . $default . '"' . ($placeholder !== '' ? ' placeholder="' . $placeholder . '"' : '') . ' ' . $required . $error_border . ' />
+                    ' . $error_html . '
                 </div>';
                 return $html;
 
             case 'phone':
                 $html = '<div class="' . $css_class . ' form-field">
                     <label class="form-label" for="' . $name . '">' . $label_text . '</label>
-                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="tel" name="' . $name . '" ' . $required . ' />
-                     <div class="form-text">' . $placeholder . '</div>
+                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="tel" name="' . $name . '" value="' . $default . '"' . ($placeholder !== '' ? ' placeholder="' . $placeholder . '"' : '') . ' ' . $required . $error_border . ' />
+                    ' . $error_html . '
                 </div>';
                 return $html;
 
             case 'textarea':
                 $html = '<div class="' . $css_class . ' form-field"><label class="form-label" for="' . $name . '">' . $label_text . '</label>
-                    <textarea class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" name="' . $name . '" ' . $required . ' ></textarea>
+                    <textarea class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" name="' . $name . '"' . ($placeholder !== '' ? ' placeholder="' . $placeholder . '"' : '') . ' ' . $required . $error_border . ' >' . $default . '</textarea>
+                    ' . $error_html . '
                 </div>';
                 return $html;
 
             case 'select':
-                $options = $this->parseOptions($field['field_options']);
+                $options = self::parseOptions($field['field_options']);
                 $placeholder_option = $placeholder != ''
                     ? '<option value="" disabled selected>' . htmlspecialchars($placeholder, ENT_QUOTES) . '</option>'
                     : '<option value="" selected></option>';
                 $html = '<div class="' . $css_class . ' form-field">
                     <label class="form-label" for="' . $name . '">' . $label_text . '</label>
-                    <select name="' . $name . '" id="' . $name . '" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" class="form-control"' . $required . '>
+                    <select name="' . $name . '" id="' . $name . '" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" class="form-control"' . $required . ($field_error ? ' style="border-color:#dc3545;"' : '') . '>
                     ' . $placeholder_option;
                 foreach ($options as $opt) {
                     $selected = ($opt['value'] === $raw_default) ? ' selected' : '';
@@ -360,11 +505,12 @@ document.addEventListener("DOMContentLoaded", function () {
                     );
                 }
                 $html .= '</select>
+                    ' . $error_html . '
                 </div>';
                 return $html;
 
             case 'radio':
-                $options = $this->parseOptions($field['field_options']);
+                $options = self::parseOptions($field['field_options']);
                 $data_required = ($field['is_required'] === 'y') ? ' data-required="true"' : '';
                 $html = '<div class="' . $css_class . ' form-field radio-group"' . $data_required . ' data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '">';
                 $html .= '<label class="form-label">' . $label_text . '</label>';
@@ -375,6 +521,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     $html .= '<label style="width: fit-content"><input type="radio" name="' . $name . '" id="' . $option_id . '" value="' . htmlspecialchars($opt['value'], ENT_QUOTES) . '"' . $checked . ' ' . $required . '> ' . htmlspecialchars($opt['label'], ENT_QUOTES) . '</label>';
                 }
                 $html .= '</div>';
+                $html .= $error_html;
                 if ($placeholder != '') {
                     $html .= '<div class="form-text">' . htmlspecialchars($placeholder, ENT_QUOTES) . '</div>';
                 }
@@ -382,25 +529,29 @@ document.addEventListener("DOMContentLoaded", function () {
                 return $html;
 
             case 'checkbox':
-                $options = $this->parseOptions($field['field_options']);
+                $options = self::parseOptions($field['field_options']);
                 if (empty($options)) {
                     // Single checkbox
-                    $checked = ($default === 'y' || $default === '1') ? ' checked' : '';
+                    $checked = ($raw_old !== null) ? ($raw_old ? ' checked' : '') : (($default === 'y' || $default === '1') ? ' checked' : '');
                     $data_required = ($field['is_required'] === 'y') ? ' data-required="true"' : '';
-                    return sprintf(
-                        '<div class="' . $css_class . ' form-field"' . $data_required . '  data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '"><div class="form-check d-flex mt-md-3">
-                <input class="form-check-input" type="checkbox" name="%s" id="%s" value="%s"%s />
-                <label class="form-check-label p" for="%s">%s</label>
-              </div></div>',
-                        $name,
-                        $name,
-                        $name,
-                        $checked,
-                        $name,
-                        nl2br(htmlspecialchars($field['field_label'], ENT_QUOTES)) . ($field['is_required'] === 'y' ? ' <span class="red">*</span>' : '')
-                    );
+                    return '<div class="' . $css_class . ' form-field"' . $data_required . ' data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '"><div class="form-check mb-3 mt-3 align-items-center d-flex">'
+                        . sprintf(
+                            '<input class="form-check-input me-2 mt-0" type="checkbox" name="%s" id="%s" value="%s"%s />'
+                            . '<label class="form-check-label" for="%s">%s</label>',
+                            $name,
+                            $name,
+                            $name,
+                            $checked,
+                            $name,
+                            nl2br(htmlspecialchars($field['field_label'], ENT_QUOTES)) . ($field['is_required'] === 'y' ? ' <span class="red">*</span>' : '')
+                        )
+                        . '</div>' . $error_html . '</div>';
                 }
-                // Multiple checkboxes
+                // Multiple checkboxes — old value and default are stored as comma-separated strings
+                $checked_source = $raw_old !== null ? $raw_old : ($field['default_value'] ?? '');
+                $old_checked = !empty($checked_source)
+                    ? array_map('trim', explode(',', $checked_source))
+                    : array();
                 $data_required = ($field['is_required'] === 'y') ? ' data-required="true"' : '';
                 $html = '<div class="' . $css_class . ' form-field checkbox-group"' . $data_required . ' data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '">
                     <label class="form-label">' . $label_text . '</label>
@@ -408,28 +559,77 @@ document.addEventListener("DOMContentLoaded", function () {
                 foreach ($options as $i => $opt) {
                     $slug = preg_replace('/[^a-z0-9]+/', '-', strtolower($opt['value']));
                     $option_id = $name . '_' . $i . '_' . $slug;
+                    $checked = (!empty($old_checked) && in_array($opt['value'], $old_checked)) ? ' checked' : '';
                     $html .= sprintf(
-                        '<label style="width: fit-content"><input type="checkbox" name="%s[]" value="%s"> %s</label>',
+                        '<label style="width: fit-content"><input type="checkbox" name="%s[]" value="%s"%s> %s</label>',
                         $name,
                         htmlspecialchars($opt['value'], ENT_QUOTES),
+                        $checked,
                         htmlspecialchars($opt['label'], ENT_QUOTES)
                     );
                 }
-                return $html . '</div></div>';
+                return $html . '</div>' . $error_html . '</div>';
+
+            case 'mailchimp_subscription':
+                $mc_config = !empty($field['field_config'])
+                    ? (json_decode($field['field_config'], true) ?: array())
+                    : array();
+
+                if (!$this->isMailchimpFieldConfigured($field, $mc_config)) {
+                    return '';
+                }
+
+                $mc_default_checked = ($mc_config['mailchimp_default_checked'] ?? 'n') === 'y';
+                $mc_checked_attr = ($raw_old !== null)
+                    ? ($raw_old ? ' checked' : '')
+                    : ($mc_default_checked ? ' checked' : '');
+                $mc_data_required = ($field['is_required'] === 'y') ? ' data-required="true"' : '';
+
+                $mc_header_html = '';
+                if (!empty($field['field_header'])) {
+                    $mc_header_html = '<div class="form-field-header">'
+                        . nl2br(htmlspecialchars($field['field_header'], ENT_QUOTES))
+                        . '</div>';
+                }
+
+                return $mc_header_html . sprintf(
+                    '<div class="' . $css_class . ' form-field"' . $mc_data_required
+                    . ' data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES)
+                    . '"><div class="form-check mb-3 mt-3 align-items-center d-flex">'
+                    . '<input class="form-check-input me-2 mt-0" type="checkbox" name="%s" id="%s" value="%s"%s />'
+                    . '<label class="form-check-label" for="%s">%s</label>'
+                    . '</div></div>',
+                    $name,
+                    $name,
+                    $name,
+                    $mc_checked_attr,
+                    $name,
+                    nl2br(htmlspecialchars($field['field_label'], ENT_QUOTES))
+                        . ($field['is_required'] === 'y' ? ' <span class="red">*</span>' : '')
+                );
 
             case 'date':
                 $html = '<div class="' . $css_class . ' form-field">
                     <label class="form-label" for="' . $name . '">' . $label_text . '</label>
-                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="date" name="' . $name . '" ' . $required . ' />
+                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="date" name="' . $name . '" value="' . $default . '" ' . $required . $error_border . ' />
+                    ' . $error_html . '
                     <div class="form-text">' . $placeholder . '</div>
                 </div>';
                 return $html;
 
             case 'time':
+                $time_placeholder = $placeholder;
+                if (!empty($field['placeholder']) && preg_match('/^\d{2}:\d{2}/', $field['placeholder'])) {
+                    $dt = \DateTime::createFromFormat('H:i', substr($field['placeholder'], 0, 5));
+                    if ($dt) {
+                        $time_placeholder = htmlspecialchars($dt->format('g:i A'), ENT_QUOTES);
+                    }
+                }
                 $html = '<div class="' . $css_class . ' form-field">
                     <label class="form-label" for="' . $name . '">' . $label_text . '</label>
-                    <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="time" name="' . $name . '" ' . $required . ' />
-                    <div class="form-text">' . $placeholder . '</div>
+                    <input class="form-control" lang="en-US" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" type="time" name="' . $name . '" value="' . $default . '" ' . $required . $error_border . ' />
+                    ' . $error_html . '
+                    <div class="form-text">' . $time_placeholder . '</div>
                 </div>';
                 return $html;
 
@@ -441,21 +641,32 @@ document.addEventListener("DOMContentLoaded", function () {
                     $accept = ' accept=".' . implode(',.', $types) . '"';
                 }
                 $html = '<div class="' . $css_class . ' form-field">
+                    <label class="form-label">' . $label_text . '</label>
                     <div class="upload-file">
-                    <div class="form-text">' . $placeholder . '</div>
-                    <div class="input-group mt-4">
-                        <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" name="' . $name . '[]" type="file" multiple ' . $accept . ' />
+                    <div class="input-group">
+                        <input class="form-control" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '" id="' . $name . '" name="' . $name . '[]" type="file" multiple' . $accept . $required . ' />
                         <div id="feedback_' . $name . '" class=""></div>
                         <div class="file-list" id="fileList_' . $name . '"></div>
                         <label class="input-group-text" for="' . $name . '">Upload</label>
                     </div>
+                    <div class="form-text">' . $placeholder . '</div>
                     </div>
                 </div>';
                 return $html;
 
             case 'warning':
-                $html = '<div class="' . $css_class . ' form-field"><div class="form-label fw-bold form-control ps-0 mb-0">' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '</div><div class="form-text">' . $placeholder . '</div>
-                </div>';
+                $warning_color_style = '';
+                if (!empty($field['field_config'])) {
+                    $warning_cfg = json_decode($field['field_config'], true) ?: array();
+                    $warning_color = $warning_cfg['warning_color'] ?? '';
+                    if ($warning_color && preg_match('/^#[0-9a-fA-F]{3,6}$/', $warning_color)) {
+                        $warning_color_style = ' style="color:' . htmlspecialchars($warning_color, ENT_QUOTES) . '"';
+                    }
+                }
+                $html = '<div class="' . $css_class . ' form-field">'
+                    . '<p class="fw-bold mb-1"' . $warning_color_style . '>' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '</p>'
+                    . ($placeholder ? '<div class="form-text">' . $placeholder . '</div>' : '')
+                    . '</div>';
                 return $html;
 
             default:
@@ -474,7 +685,7 @@ document.addEventListener("DOMContentLoaded", function () {
     /**
      * Parse field options (one per line, optionally value|label format)
      */
-    private function parseOptions($options_string)
+    public static function parseOptions($options_string)
     {
         if (empty($options_string)) {
             return array();
@@ -547,22 +758,23 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        // Rate limit: max 5 submissions per IP per form per 10 minutes
+        // Rate limit: max 5 submissions per IP per form per 10 minutes (skipped on localhost)
+        $is_localhost = in_array(
+            ee()->input->server('SERVER_NAME'),
+            ['localhost', '127.0.0.1', '::1']
+        );
+
         $ip       = ee()->input->ip_address();
         $rate_key = 'form_builder_rate_' . md5($ip . '_' . $form_id);
         $attempts = ee()->cache->get($rate_key, Cache::LOCAL_SCOPE);
         $attempts = ($attempts !== false) ? (int) $attempts : 0;
 
-        if ($attempts >= 5) {
+        if (!$is_localhost && $attempts >= 5) {
             $this->handleError('Too many submissions. Please wait a few minutes and try again.', $form_id);
             return;
         }
 
         // Verify reCAPTCHA if enabled (skip on localhost for local dev)
-        $is_localhost = in_array(
-            ee()->input->server('SERVER_NAME'),
-            ['localhost', '127.0.0.1', '::1']
-        );
         if (
             !$is_localhost &&
             isset($this->settings['recaptcha_enabled']) &&
@@ -626,7 +838,7 @@ document.addEventListener("DOMContentLoaded", function () {
         $reply_to_email = null;
 
         foreach ($fields as $field) {
-            if (in_array($field['field_type'], ['warning', 'header'])) {
+            if ($field['field_type'] === 'warning') {
                 continue;
             }
             $field_name = $field['field_name'];
@@ -676,12 +888,17 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (is_array($value)) {
                     $value = implode(', ', $value);
                 }
-            }else {
+            } elseif ($field['field_type'] === 'mailchimp_subscription') {
+                $value = ee()->input->post($field_name) ? 'y' : 'n';
+            } else {
                 $value = ee()->input->post($field_name);
             }
 
             // Validate required fields
-            if ($field['is_required'] === 'y' && $field['field_type'] !== 'file' && $field['field_type'] !== 'checkbox') {
+            if ($field['is_required'] === 'y'
+                && $field['field_type'] !== 'file'
+                && $field['field_type'] !== 'checkbox'
+                && $field['field_type'] !== 'mailchimp_subscription') {
                 if ($value === null || $value === '' || $value === false) {
                     $errors[$field_name] = $field['field_label'] . ' is required';
                 }
@@ -692,9 +909,12 @@ document.addEventListener("DOMContentLoaded", function () {
                 $errors[$field_name] = $field['field_label'] . ' must be a valid email address';
             }
 
-            // Validate URL format
-            if ($field['field_type'] === 'url' && !empty($value) && !filter_var($value, FILTER_VALIDATE_URL)) {
-                $errors[$field_name] = $field['field_label'] . ' must be a valid URL';
+            // Validate URL format and reject dangerous schemes (javascript:, data:, file:, etc.)
+            if ($field['field_type'] === 'url' && !empty($value)) {
+                $url_scheme = strtolower((string) parse_url($value, PHP_URL_SCHEME));
+                if (!filter_var($value, FILTER_VALIDATE_URL) || !in_array($url_scheme, array('http', 'https'), true)) {
+                    $errors[$field_name] = $field['field_label'] . ' must be a valid URL (http or https only)';
+                }
             }
 
             $submission_data[$field_name] = array(
@@ -728,9 +948,18 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // If errors, redirect back with flash data
         if (!empty($errors)) {
+            file_put_contents('/tmp/fb_debug.txt', date('H:i:s') . ' ERRORS SET form_id=' . $form_id . ' keys=' . implode(',', array_keys($errors)) . "\n", FILE_APPEND);
             ee()->session->set_flashdata('form_builder_errors_' . $form_id, $errors);
-            $old_data = ee()->input->post();
+            $old_data = $_POST;
             unset($old_data['csrf_token'], $old_data['form_id'], $old_data['return']);
+            // Normalize checkbox arrays to comma-separated strings; drop file fields (can't repopulate)
+            foreach ($fields as $_f) {
+                if ($_f['field_type'] === 'file') {
+                    unset($old_data[$_f['field_name']]);
+                } elseif (isset($old_data[$_f['field_name']]) && is_array($old_data[$_f['field_name']])) {
+                    $old_data[$_f['field_name']] = implode(',', $old_data[$_f['field_name']]);
+                }
+            }
             ee()->session->set_flashdata('form_builder_old_' . $form_id, $old_data);
 
             $return = ee()->input->post('return');
@@ -766,14 +995,35 @@ document.addEventListener("DOMContentLoaded", function () {
             'submitted_at' => date('Y-m-d H:i:s')
         );
 
-        ee()->db->insert('form_builder_submissions', $submission);
-        $submission_id = ee()->db->insert_id();
+        try {
+            ee()->db->insert('form_builder_submissions', $submission);
+            $submission_id = ee()->db->insert_id();
+        } catch (\Exception $e) {
+            log_message('error', 'Form Builder: failed to save submission for form ' . $form_id . ': ' . $e->getMessage());
+            $submission_id = 0;
+        }
+
+        if (!$submission_id) {
+            log_message('error', 'Form Builder: failed to save submission for form ' . $form_id);
+            $this->handleError('Your submission was unsuccessful. Please try again.', $form_id);
+            return;
+        }
 
         // Increment rate limit counter only on a successful save
         ee()->cache->save($rate_key, $attempts + 1, 600, Cache::LOCAL_SCOPE);
 
+        // Mailchimp subscription processing
+        $mailchimp_result = $this->processMailchimpSubscription($form, $fields, $submission_id, $submission_data);
+        if ($mailchimp_result['status'] !== 'none') {
+            ee()->db->where('submission_id', $submission_id)
+                ->update('form_builder_submissions', array(
+                    'mailchimp_status' => $mailchimp_result['status'],
+                    'mailchimp_error'  => !empty($mailchimp_result['error_detail']) ? $mailchimp_result['error_detail'] : null
+                ));
+        }
+
         // Send notification email
-        $email_sent = $this->sendNotificationEmail($form, $submission_data, $reply_to_email);
+        $email_sent = $this->sendNotificationEmail($form, $submission_data, $reply_to_email, $mailchimp_result);
         if ($email_sent) {
             ee()->db->where('submission_id', $submission_id)
                 ->update('form_builder_submissions', array('email_sent' => 'y'));
@@ -781,10 +1031,30 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Send confirmation email
         if ($form['send_confirmation'] === 'y' && $reply_to_email) {
-            $confirmation_sent = $this->sendConfirmationEmail($form, $submission_data, $reply_to_email);
+            $confirmation_sent = $this->sendConfirmationEmail($form, $submission_data, $reply_to_email, $mailchimp_result);
             if ($confirmation_sent) {
                 ee()->db->where('submission_id', $submission_id)
                     ->update('form_builder_submissions', array('confirmation_sent' => 'y'));
+            }
+        }
+
+        // Send separate Mailchimp alert email if applicable
+        $mc_is_failure = in_array($mailchimp_result['status'], self::MAILCHIMP_FAILURE_STATUSES, true);
+        $mc_alerts_email = !empty($this->settings['mailchimp_alerts_email'])
+            ? trim((string) $this->settings['mailchimp_alerts_email'])
+            : '';
+        if ($mc_is_failure && $mc_alerts_email !== '') {
+            // Parse recipient_email (may be comma-separated) and check if alerts_email is already covered
+            $recipient_addresses = array_filter(array_map('trim', explode(',', (string) $form['recipient_email'])));
+            $alert_already_covered = false;
+            foreach ($recipient_addresses as $addr) {
+                if (strcasecmp($mc_alerts_email, $addr) === 0) {
+                    $alert_already_covered = true;
+                    break;
+                }
+            }
+            if (!$alert_already_covered) {
+                $this->sendMailchimpAlertEmail($mc_alerts_email, $form, $submission_data, $submission_id, $mailchimp_result);
             }
         }
 
@@ -921,7 +1191,7 @@ document.addEventListener("DOMContentLoaded", function () {
     /**
      * Send notification email to recipient
      */
-    private function sendNotificationEmail($form, $submission_data, $reply_to = null)
+    private function sendNotificationEmail($form, $submission_data, $reply_to = null, $mailchimp_result = null)
     {
         if (empty($form['recipient_email'])) {
             return false;
@@ -930,10 +1200,11 @@ document.addEventListener("DOMContentLoaded", function () {
         $body = "New submission from: " . $form['form_label'] . "\n\n";
         $attachments = [];
 
+        $mc_fail = $mailchimp_result !== null && in_array($mailchimp_result['status'], self::MAILCHIMP_FAILURE_STATUSES, true);
+
         foreach ($submission_data as $field_name => $field_data) {
             if (!empty($field_data['value']) && $field_data['type'] === 'file') {
-                $body .= $field_data['label'] . ": [Attached File]\n";
-                // Collect file paths for attachment
+                $body .= strtoupper($field_data['label']) . ":\n[Attached File]\n\n";
                 $files = explode(',', $field_data['value']);
                 foreach ($files as $file) {
                     $file = trim($file);
@@ -942,12 +1213,38 @@ document.addEventListener("DOMContentLoaded", function () {
                         $attachments[] = $filepath;
                     }
                 }
+            } elseif ($field_data['type'] === 'mailchimp_subscription') {
+                $mc_success = $mailchimp_result !== null && in_array($mailchimp_result['status'], self::MAILCHIMP_SUCCESS_STATUSES, true);
+                if ($field_data['value'] === 'y' && $mc_fail) {
+                    $display = 'Yes - subscription failed, see Mailchimp subscription failure alert below';
+                } elseif ($field_data['value'] === 'y' && $mc_success) {
+                    $display = 'Yes - successfully ' . $mailchimp_result['status'];
+                } elseif ($field_data['value'] === 'y') {
+                    $display = 'Yes';
+                } else {
+                    $display = 'No';
+                }
+                $body .= strtoupper($field_data['label']) . ":\n" . $display . "\n\n";
             } else {
-                $body .= $field_data['label'] . ": " . $field_data['value'] . "\n";
+                $body .= strtoupper($field_data['label']) . ":\n" . $field_data['value'] . "\n\n";
             }
         }
 
         $body .= "\n---\nSubmitted at: " . date('Y-m-d H:i:s');
+
+        // Append Mailchimp alert section if subscription failed
+        if ($mc_fail) {
+            $body .= "\n\n---\nMAILCHIMP SUBSCRIPTION ALERT\n";
+            $body .= "Status: " . $mailchimp_result['status'] . "\n";
+            if (!empty($mailchimp_result['error_detail'])) {
+                $body .= "Detail: " . $mailchimp_result['error_detail'] . "\n";
+            }
+            if ($mailchimp_result['status'] === 'failed_permanently_deleted') {
+                $body .= "Why: This contact was permanently deleted from Mailchimp and cannot be re-imported via the API.\n";
+                $body .= "Fix: The contact must re-subscribe through a Mailchimp signup form, or be manually added through the Mailchimp dashboard (Audience → Add a contact).\n";
+            }
+            $body .= "Note: submission was saved and the user was served the success page. The Mailchimp subscription did NOT complete; add manually if needed.\n";
+        }
 
         $subject = !empty($form['email_subject'])
             ? $form['email_subject']
@@ -976,7 +1273,7 @@ document.addEventListener("DOMContentLoaded", function () {
     /**
      * Send confirmation email to submitter
      */
-    private function sendConfirmationEmail($form, $submission_data, $to_email)
+    private function sendConfirmationEmail($form, $submission_data, $to_email, $mailchimp_result = null)
     {
         if (empty($form['confirmation_template'])) {
             return false;
@@ -991,6 +1288,29 @@ document.addEventListener("DOMContentLoaded", function () {
             $replace[] = (string) $field_data['value'];
         }
         $body = str_replace($search, $replace, $body);
+
+        // Resolve {mailchimp_status} placeholder
+        $mailchimp_line = '';
+        if ($mailchimp_result !== null) {
+            switch ($mailchimp_result['status']) {
+                case 'subscribed':
+                case 'reactivated':
+                case 'updated':
+                    $mailchimp_line = !empty($form['mailchimp_success_text'])
+                        ? $form['mailchimp_success_text']
+                        : lang('form_builder_mailchimp_default_success');
+                    break;
+                case 'failed':
+                case 'failed_rate_limit':
+                case 'failed_invalid_email':
+                case 'skipped_misconfigured':
+                    $mailchimp_line = !empty($form['mailchimp_failure_text'])
+                        ? $form['mailchimp_failure_text']
+                        : lang('form_builder_mailchimp_default_failure');
+                    break;
+            }
+        }
+        $body = str_replace('{mailchimp_status}', $mailchimp_line, $body);
 
         $subject = !empty($form['confirmation_subject'])
             ? $form['confirmation_subject']
@@ -1028,9 +1348,9 @@ document.addEventListener("DOMContentLoaded", function () {
                 'charset' => 'utf-8'
             );
 
-            if (!empty($this->settings['smtp_encryption']) && $this->settings['smtp_encryption'] !== 'none') {
-                $config['smtp_crypto'] = $this->settings['smtp_encryption'];
-            }
+            $config['smtp_crypto'] = (!empty($this->settings['smtp_encryption']) && $this->settings['smtp_encryption'] !== 'none')
+                ? $this->settings['smtp_encryption']
+                : '';
 
             ee()->email->initialize($config);
         }
@@ -1062,6 +1382,318 @@ document.addEventListener("DOMContentLoaded", function () {
         ee()->email->clear();
 
         return $result;
+    }
+
+    // -------------------------------------------------------------------------
+    // MAILCHIMP
+    // -------------------------------------------------------------------------
+
+    private function isMailchimpFieldConfigured($field, $config)
+    {
+        if (empty($this->settings['mailchimp_api_key'])) {
+            return false;
+        }
+        if (empty($config['mailchimp_list_id'])) {
+            return false;
+        }
+        if (empty($config['mailchimp_email_field'])) {
+            return false;
+        }
+
+        $list_exists = ee()->db->where('list_id', $config['mailchimp_list_id'])
+            ->where('site_id', $this->site_id)
+            ->count_all_results('form_builder_mailchimp_lists');
+        if ($list_exists === 0) {
+            return false;
+        }
+
+        $email_field_exists = ee()->db->where('form_id', $field['form_id'])
+            ->where('field_name', $config['mailchimp_email_field'])
+            ->where('field_type', 'email')
+            ->count_all_results('form_builder_fields');
+        if ($email_field_exists === 0) {
+            return false;
+        }
+
+        if (!empty($config['mailchimp_merge_fields'])) {
+            $form_field_names = array_column(
+                ee()->db->select('field_name')->where('form_id', $field['form_id'])
+                    ->get('form_builder_fields')->result_array(),
+                'field_name'
+            );
+            $mf = $config['mailchimp_merge_fields'];
+            if (is_string($mf)) {
+                $pairs = array();
+                foreach (preg_split('/\r\n|\r|\n/', $mf) as $line) {
+                    $line = trim($line);
+                    if ($line === '' || strpos($line, '=') === false) continue;
+                    list($t, $f) = array_map('trim', explode('=', $line, 2));
+                    $pairs[] = array('tag' => $t, 'field' => $f);
+                }
+            } else {
+                $pairs = (array) $mf;
+            }
+            foreach ($pairs as $pair) {
+                $rhs = $pair['field'] ?? '';
+                if ($rhs !== '' && !in_array($rhs, $form_field_names, true)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private function processMailchimpSubscription($form, $fields, $submission_id, $submission_data)
+    {
+        $result = array('status' => 'none', 'error_detail' => '', 'http_status' => 0);
+
+        $mc_field = null;
+        foreach ($fields as $f) {
+            if ($f['field_type'] === 'mailchimp_subscription') {
+                $mc_field = $f;
+                break;
+            }
+        }
+        if (!$mc_field) {
+            return $result;
+        }
+
+        $config = !empty($mc_field['field_config'])
+            ? (json_decode($mc_field['field_config'], true) ?: array())
+            : array();
+
+        if (!$this->isMailchimpFieldConfigured($mc_field, $config)) {
+            $result['status'] = 'skipped_misconfigured';
+            return $result;
+        }
+
+        $checked = isset($submission_data[$mc_field['field_name']])
+            && $submission_data[$mc_field['field_name']]['value'] === 'y';
+        if (!$checked) {
+            $result['status'] = 'skipped_unchecked';
+            return $result;
+        }
+
+        $email = isset($submission_data[$config['mailchimp_email_field']])
+            ? trim((string) $submission_data[$config['mailchimp_email_field']]['value'])
+            : '';
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $result['status'] = 'failed_invalid_email';
+            return $result;
+        }
+
+        $merge_fields = $this->parseMergeFields($config['mailchimp_merge_fields'] ?? '', $submission_data);
+
+        $tags = array();
+        if (!empty($config['mailchimp_tags'])) {
+            if (is_array($config['mailchimp_tags'])) {
+                $tags = array_values(array_filter(array_map('trim', $config['mailchimp_tags'])));
+            } else {
+                $tags = array_filter(array_map('trim', explode(',', (string) $config['mailchimp_tags'])));
+            }
+        }
+
+        return $this->callMailchimpSubscribe($config['mailchimp_list_id'], $email, $merge_fields, $tags);
+    }
+
+    private function parseMergeFields($mapping, $submission_data)
+    {
+        $result = array();
+
+        // Normalize to array of {tag, field} pairs
+        if (is_array($mapping)) {
+            $pairs = $mapping;
+        } elseif (is_string($mapping) && $mapping !== '') {
+            $pairs = array();
+            foreach (preg_split('/\r\n|\r|\n/', $mapping) as $line) {
+                $line = trim($line);
+                if ($line === '' || strpos($line, '=') === false) continue;
+                list($t, $f) = array_map('trim', explode('=', $line, 2));
+                if ($t !== '' && $f !== '') $pairs[] = array('tag' => $t, 'field' => $f);
+            }
+        } else {
+            return $result;
+        }
+
+        foreach ($pairs as $pair) {
+            $tag = $pair['tag']   ?? '';
+            $fld = $pair['field'] ?? '';
+            if (!preg_match('/^[A-Z0-9_]+$/', $tag)) continue;
+            if (isset($submission_data[$fld]['value'])) {
+                $result[$tag] = (string) $submission_data[$fld]['value'];
+            }
+        }
+        return $result;
+    }
+
+    private function callMailchimpSubscribe($list_id, $email, $merge_fields, $tags)
+    {
+        $result = array('status' => 'failed', 'error_detail' => '', 'http_status' => 0);
+
+        $api_key = !empty($this->settings['mailchimp_api_key'])
+            ? trim((string) ee('Encrypt')->decode($this->settings['mailchimp_api_key']))
+            : '';
+        if ($api_key === '') {
+            $result['error_detail'] = 'API key not configured';
+            return $result;
+        }
+
+        $api_base = $this->getMailchimpApiBase($api_key);
+        if ($api_base === null) {
+            $result['error_detail'] = 'Invalid API key format';
+            return $result;
+        }
+
+        $url     = "{$api_base}/lists/{$list_id}/members";
+        $payload = array(
+            'email_address' => $email,
+            'status'        => 'subscribed',
+            'merge_fields'  => (object) $merge_fields,
+        );
+        if (!empty($tags)) {
+            $payload['tags'] = array_values($tags);
+        }
+
+        $response = $this->mailchimpRequest('POST', $url, $api_key, $payload);
+
+        if ($response['http_status'] === 200) {
+            $result['status'] = 'subscribed';
+            return $result;
+        }
+
+        // Member exists — PUT to update/reactivate
+        if ($response['http_status'] === 400
+            && isset($response['body']['title'])
+            && $response['body']['title'] === 'Member Exists') {
+
+            $subscriber_hash = md5(strtolower($email));
+            $put_url = "{$api_base}/lists/{$list_id}/members/{$subscriber_hash}";
+
+            $get_response    = $this->mailchimpRequest('GET', $put_url, $api_key);
+            $previous_status = ($get_response['http_status'] === 200)
+                ? ($get_response['body']['status'] ?? '')
+                : '';
+
+            $put_payload = array(
+                'email_address' => $email,
+                'status'        => 'subscribed',
+                'merge_fields'  => (object) $merge_fields,
+            );
+            if (!empty($tags)) {
+                $put_payload['tags'] = array_values($tags);
+            }
+            $put_response = $this->mailchimpRequest('PUT', $put_url, $api_key, $put_payload);
+
+            if ($put_response['http_status'] === 200) {
+                $result['status'] = ($previous_status === 'unsubscribed') ? 'reactivated' : 'updated';
+                return $result;
+            }
+            $result['error_detail'] = 'PUT failed: HTTP ' . $put_response['http_status']
+                . (isset($put_response['body']['detail']) ? ': ' . $put_response['body']['detail'] : '');
+            $result['http_status'] = $put_response['http_status'];
+            return $result;
+        }
+
+        if ($response['http_status'] === 429) {
+            $result['status']       = 'failed_rate_limit';
+            $result['error_detail'] = 'Rate limited by Mailchimp';
+            $result['http_status']  = 429;
+            return $result;
+        }
+
+        $detail = isset($response['body']['detail']) ? $response['body']['detail'] : '';
+        if (stripos($detail, 'permanently deleted') !== false) {
+            $result['status']       = 'failed_permanently_deleted';
+            $result['error_detail'] = $detail;
+            $result['http_status']  = $response['http_status'];
+            return $result;
+        }
+
+        $result['error_detail'] = 'HTTP ' . $response['http_status'] . ($detail !== '' ? ': ' . $detail : '');
+        $result['http_status']  = $response['http_status'];
+        return $result;
+    }
+
+    private function getMailchimpApiBase($api_key)
+    {
+        $api_key  = trim((string) $api_key);
+        $dash_pos = strrpos($api_key, '-');
+        if ($dash_pos === false || $dash_pos === strlen($api_key) - 1) {
+            return null;
+        }
+        $dc = substr($api_key, $dash_pos + 1);
+        if (!preg_match('/^[a-z]{2}\d+$/', $dc)) {
+            return null;
+        }
+        return "https://{$dc}.api.mailchimp.com/3.0";
+    }
+
+    private function mailchimpRequest($method, $url, $api_key, $payload = null)
+    {
+        $ch   = curl_init($url);
+        $opts = array(
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 3,
+            CURLOPT_CONNECTTIMEOUT => 2,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HTTPHEADER     => array(
+                'Content-Type: application/json',
+                'Authorization: Basic ' . base64_encode('anystring:' . $api_key),
+            ),
+            CURLOPT_CUSTOMREQUEST  => $method,
+        );
+        if ($payload !== null) {
+            $opts[CURLOPT_POSTFIELDS] = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        curl_setopt_array($ch, $opts);
+
+        $raw_response = curl_exec($ch);
+        $http_status  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error   = curl_error($ch);
+        curl_close($ch);
+
+        if ($raw_response === false) {
+            log_message('error', 'Form Builder Mailchimp: cURL error: ' . $curl_error);
+            return array('http_status' => 0, 'body' => null, 'curl_error' => $curl_error);
+        }
+
+        return array('http_status' => $http_status, 'body' => json_decode($raw_response, true), 'curl_error' => '');
+    }
+
+    private function sendMailchimpAlertEmail($to_email, $form, $submission_data, $submission_id, $mailchimp_result)
+    {
+        $subject = '[Mailchimp Alert] Subscription failure on form: ' . $form['form_label'];
+
+        $body  = "MAILCHIMP SUBSCRIPTION FAILURE ALERT\n";
+        $body .= "=====================================\n\n";
+        $body .= "Form: " . $form['form_label'] . " (ID " . $form['form_id'] . ")\n";
+        $body .= "Submission ID: " . $submission_id . "\n";
+        $body .= "Submitted at: " . date('Y-m-d H:i:s') . "\n";
+        $body .= "Status: " . $mailchimp_result['status'] . "\n";
+        if (!empty($mailchimp_result['error_detail'])) {
+            $body .= "Detail: " . $mailchimp_result['error_detail'] . "\n";
+        }
+        if (!empty($mailchimp_result['http_status'])) {
+            $body .= "HTTP Status: " . $mailchimp_result['http_status'] . "\n";
+        }
+
+        $body .= "\n---\nSUBMISSION DATA\n---\n\n";
+        foreach ($submission_data as $field_data) {
+            if ($field_data['type'] === 'file') {
+                $body .= strtoupper($field_data['label']) . ":\n[file]\n\n";
+            } else {
+                $body .= strtoupper($field_data['label']) . ":\n" . $field_data['value'] . "\n\n";
+            }
+        }
+
+        $body .= "\nNote: the user's form submission was saved and they were served the success page. The Mailchimp subscription did NOT complete; add manually if needed.\n";
+
+        $from_name  = $this->settings['from_name']  ?? ee()->config->item('site_name');
+        $from_email = $this->settings['from_email'] ?? ee()->config->item('webmaster_email');
+
+        return $this->sendEmail($to_email, $subject, $body, null, $from_name, $from_email);
     }
 
     /**
@@ -1102,9 +1734,20 @@ document.addEventListener("DOMContentLoaded", function () {
     {
         $key = $form_id ? 'form_builder_errors_' . $form_id : 'form_builder_errors';
         ee()->session->set_flashdata($key, array('general' => $message));
+        if ($form_id) {
+            $old_data = $_POST;
+            unset($old_data['csrf_token'], $old_data['form_id'], $old_data['return']);
+            foreach ($old_data as $_k => $_v) {
+                if (is_array($_v)) {
+                    $old_data[$_k] = implode(',', $_v);
+                }
+            }
+            ee()->session->set_flashdata('form_builder_old_' . $form_id, $old_data);
+        }
+        $anchor = $form_id ? '#form-builder-' . $form_id : '';
         $referrer = ee()->input->server('HTTP_REFERER');
         if ($referrer && $this->isSafeRedirect($referrer)) {
-            ee()->functions->redirect($referrer);
+            ee()->functions->redirect($referrer . $anchor);
         } else {
             ee()->functions->redirect(ee()->functions->fetch_site_index());
         }

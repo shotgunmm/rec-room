@@ -1,0 +1,9 @@
+.event-details {
+  a {
+    color: $orange;
+
+    &.cta {
+      color: inherit;
+    }
+  }
+}

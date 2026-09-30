@@ -1,6 +1,7 @@
 <?php
 
 use ExpressionEngine\Library\Date\DateTrait;
+use ExpressionEngine\Addons\Rte\RteHelper;
 
 class Event_calendar_mcp
 {
@@ -52,12 +53,19 @@ class Event_calendar_mcp
         if ($active === 'templates') {
             $templates_item->isActive();
         }
+
+        $cal_url_url  = ee('CP/URL')->make('addons/settings/event_calendar/settings');
+        $cal_url_item = $settings_list->addItem(lang('calendar_page_url_label'), $cal_url_url);
+        if ($active === 'settings') {
+            $cal_url_item->isActive();
+        }
     }
 
     // -------------------------------------------------------------------------
 
     private function _setup_form()
     {
+        ee()->load->library('file_field');
         $this->addDatePickerScript();
         ee()->javascript->set_global(
             'date.date_format',
@@ -80,6 +88,101 @@ class Event_calendar_mcp
 
     // -------------------------------------------------------------------------
 
+    /**
+     * Render the same copyable "{field_name}" badge EE shows next to custom
+     * field labels on the channel entry publish form (Model/Content/FieldFacade::getNameBadge()).
+     * Respects the same "Show Field Short Names" role setting -- returns '' if
+     * the current member/role has it disabled.
+     */
+    private function _name_badge(string $field_name): string
+    {
+        if ((int) ee()->session->userdata('member_id') === 0) {
+            return '';
+        }
+
+        $role_settings = ee()->session->getMember()->PrimaryRole->RoleSettings
+            ->filter('site_id', ee()->config->item('site_id'))
+            ->first();
+
+        if (!$role_settings || $role_settings->show_field_names !== 'y') {
+            return '';
+        }
+
+        return ee('View')->make('publish/partials/name_badge_copy')->render(['name' => $field_name]);
+    }
+
+    /** @return array<string,string> field_name => rendered badge HTML */
+    private function _name_badges(array $field_names): array
+    {
+        $badges = [];
+        foreach ($field_names as $field_name) {
+            $badges[$field_name] = $this->_name_badge($field_name);
+        }
+        return $badges;
+    }
+
+    // -------------------------------------------------------------------------
+
+    /**
+     * Render a native EE Rich Text Editor field, matching how the core `rte`
+     * fieldtype renders itself on channel entries (same toolset lookup,
+     * same JS bootstrap). Falls back to a plain textarea if no toolset is
+     * configured (e.g. the rte addon was uninstalled).
+     */
+    private function _rte_field(string $field_name, ?string $value): string
+    {
+        $value = (string) $value;
+
+        $toolset_id = (int) (ee()->config->item('rte_default_toolset') ?: 0);
+        $toolset    = $toolset_id
+            ? ee('Model')->get('rte:Toolset')->filter('toolset_id', $toolset_id)->first()
+            : null;
+        if (!$toolset) {
+            $toolset = ee('Model')->get('rte:Toolset')->first();
+        }
+
+        ee()->load->helper('form');
+
+        if (!$toolset) {
+            return form_textarea(['name' => $field_name, 'value' => $value, 'rows' => 10]);
+        }
+
+        $service_name  = ucfirst($toolset->toolset_type) . 'Service';
+        $config_handle = ee('rte:' . $service_name)->init([], $toolset);
+
+        $id = str_replace(['[', ']'], ['_', ''], $field_name);
+        ee()->cp->add_to_foot('<script type="text/javascript">new Rte("' . $id . '", "' . $config_handle . '", false);</script>');
+
+        RteHelper::replaceFileTags($value);
+        RteHelper::replacePageTags($value);
+
+        return form_textarea([
+            'name'        => $field_name,
+            'value'       => $value,
+            'id'          => $id,
+            'rows'        => 10,
+            'data-config' => $config_handle,
+            'class'       => ee('rte:' . $service_name)->getClass(),
+            'data-defer'  => 'n',
+        ]);
+    }
+
+    /** Mirrors the core `rte` fieldtype's save() normalization. */
+    private function _save_rte(string $data): string
+    {
+        $data = preg_replace('/^(\s|<(\w+)>(&nbsp;|\s)*<\/\2>|<br \/>)*/', '', $data);
+        $data = preg_replace('/(\s|<(\w+)>(&nbsp;|\s)*<\/\2>|<br \/>)*$/', '', $data);
+        $data = preg_replace('/\?cachebuster:\d+/', '', $data);
+        $data = str_replace('&quot;', '"', $data);
+
+        RteHelper::replaceFileUrls($data);
+        RteHelper::replacePageUrls($data);
+
+        return $data;
+    }
+
+    // -------------------------------------------------------------------------
+
     private function _parse_hhmm(string $value): int|false
     {
         if (!preg_match('/^(\d{2}):(\d{2})$/', $value, $m)) {
@@ -91,6 +194,41 @@ class Event_calendar_mcp
             return false;
         }
         return mktime($h, $i, 0, 1, 1, 1970);
+    }
+
+    // -------------------------------------------------------------------------
+
+    private function _validate_url(string $url): bool
+    {
+        if ($url === '') {
+            return true;
+        }
+        $parsed = parse_url($url);
+        if ($parsed === false) {
+            return false;
+        }
+        if (!isset($parsed['host']) || !isset($parsed['scheme'])) {
+            return strncmp($url, '/', 1) === 0;
+        }
+        return in_array($parsed['scheme'] . '://', ['http://', 'https://'], true);
+    }
+
+    private function _slugify(string $title): string
+    {
+        $slug = strtolower($title);
+        $slug = preg_replace('/[^a-z0-9]+/', '-', $slug);
+        $slug = trim($slug, '-');
+        return $slug !== '' ? $slug : 'event';
+    }
+
+    private function _slug_available(string $slug, int $exclude_id = 0): bool
+    {
+        $site_id = (int) ee()->config->item('site_id');
+        $q = ee()->db->where('slug', $slug)->where('site_id', $site_id);
+        if ($exclude_id > 0) {
+            $q->where('id !=', $exclude_id);
+        }
+        return $q->count_all_results('exp_calendar_events') === 0;
     }
 
     // -------------------------------------------------------------------------
@@ -118,7 +256,33 @@ class Event_calendar_mcp
     {
         $site_id = ee()->config->item('site_id');
         $row     = ee()->db->where('site_id', $site_id)->get('event_calendar_settings')->row_array();
-        return $row ?: ['cat_group_id' => null, 'color_field_id' => null];
+        return $row ?: ['cat_group_id' => null, 'color_field_id' => null, 'calendar_page_url' => '', 'url_style' => 'clean'];
+    }
+
+    // -------------------------------------------------------------------------
+
+    private function _sync_strict_urls(string $url_style): void
+    {
+        $site_id    = (int) ee()->config->item('site_id');
+        $exp_config = $url_style === 'index' ? 'y' : 'n';
+
+        $exists = ee()->db
+            ->where('site_id', $site_id)
+            ->where('`key`', 'strict_urls')
+            ->count_all_results('exp_config');
+
+        if ($exists) {
+            ee()->db
+                ->where('site_id', $site_id)
+                ->where('`key`', 'strict_urls')
+                ->update('exp_config', ['value' => $exp_config]);
+        } else {
+            ee()->db->insert('exp_config', [
+                'site_id' => $site_id,
+                'key'     => 'strict_urls',
+                'value'   => $exp_config,
+            ]);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -392,7 +556,7 @@ class Event_calendar_mcp
                 $time_col,
                 $end_cell,
                 $cat_cell,
-                ['content' => $edit_link . '&ensp;' . $delete_link, 'encode' => FALSE],
+                ['content' => '<div class="ec-act-btns">' . $edit_link . $delete_link . '</div>', 'encode' => FALSE],
             ];
         }
 
@@ -452,19 +616,26 @@ class Event_calendar_mcp
 
         $vars = [
             'errors'         => [],
-            'title'          => '',
-            'description'    => '',
+            'title'             => '',
+            'slug'              => '',
+            'short_description_field' => $this->_rte_field('short_description', ''),
+            'event_details_field' => $this->_rte_field('event_details', ''),
+            'url'            => '',
+            'banner_image_field' => ee()->file_field->dragAndDropField('banner_image', '', 'all', 'image'),
             'start_time'     => '',
             'end_time'       => '',
             'status'         => 'open',
             'category_ids'   => [],
             'all_categories' => $all_categories,
             'form_url'       => ee('CP/URL')->make('addons/settings/event_calendar/create'),
+            'name_badges'    => $this->_name_badges(['title', 'slug', 'start_time', 'end_time', 'status', 'banner_image', 'short_description', 'event_details', 'url', 'category_ids']),
         ];
 
         if (ee()->input->post('submit')) {
-            $title       = strip_tags(ee()->input->post('title'));
-            $description = strip_tags(ee()->input->post('description'));
+            $title              = strip_tags(ee()->input->post('title'));
+            $short_description  = $this->_save_rte((string) ee()->input->post('short_description'));
+            $event_details      = $this->_save_rte((string) ee()->input->post('event_details'));
+            $slug_raw    = trim(strip_tags((string) ee()->input->post('slug')));
             $start_raw   = ee()->input->post('start_time');
             $end_raw     = ee()->input->post('end_time');
             $start_time  = ee()->localize->string_to_timestamp($start_raw);
@@ -472,11 +643,20 @@ class Event_calendar_mcp
             $status      = ee()->input->post('status');
             $cat_ids_raw = ee()->input->post('category_ids');
             $cat_ids     = is_array($cat_ids_raw) ? array_map('intval', $cat_ids_raw) : [];
+            $url   = trim(strip_tags((string) ee()->input->post('url')));
+            $banner_image = strip_tags(trim((string) ee()->input->post('banner_image')));
+
+            $slug = $slug_raw === '' ? $this->_slugify($title) : strtolower($slug_raw);
 
             $errors = [];
 
             if ($title === '' || strlen($title) > 255) {
                 $errors[] = lang('title_required');
+            }
+            if (!preg_match('/^[a-z0-9][a-z0-9-]*$/', $slug) || strlen($slug) > 255) {
+                $errors[] = lang('slug_invalid');
+            } elseif (!$this->_slug_available($slug)) {
+                $errors[] = lang('slug_taken');
             }
             if (!$start_time || $start_time <= 0) {
                 $errors[] = lang('start_time_invalid');
@@ -490,6 +670,9 @@ class Event_calendar_mcp
             if (!in_array($status, ['open', 'closed'])) {
                 $errors[] = lang('invalid_status');
             }
+            if (!$this->_validate_url($url)) {
+                $errors[] = lang('invalid_url');
+            }
 
             if (empty($errors)) {
                 $now     = ee()->localize->now;
@@ -498,14 +681,16 @@ class Event_calendar_mcp
                 ee()->db->insert('exp_calendar_events', [
                     'site_id'        => $site_id,
                     'title'          => $title,
-                    'slug'           => '',
-                    'description'    => $description,
-                    'location'       => '',
-                    'url'            => '',
-                    'start_time'     => $start_time,
-                    'end_time'       => $end_time,
-                    'all_day'        => 0,
-                    'rrule'          => null,
+                    'slug'           => $slug,
+                    'short_description' => $short_description,
+                    'event_details'  => $event_details,
+                    'location'   => '',
+                    'url'        => $url,
+                    'banner_image' => $banner_image,
+                    'start_time' => $start_time,
+                    'end_time'   => $end_time,
+                    'all_day'    => 0,
+                    'rrule'      => null,
                     'recurrence_end' => null,
                     'status'         => $status,
                     'created_at'     => $now,
@@ -524,13 +709,17 @@ class Event_calendar_mcp
                 ee()->functions->redirect($this->base_url->compile());
             }
 
-            $vars['errors']       = $errors;
-            $vars['title']        = htmlspecialchars(ee()->input->post('title'));
-            $vars['description']  = htmlspecialchars(ee()->input->post('description'));
+            $vars['errors']              = $errors;
+            $vars['title']               = htmlspecialchars(ee()->input->post('title'));
+            $vars['slug']                = htmlspecialchars($slug);
+            $vars['short_description_field'] = $this->_rte_field('short_description', $short_description);
+            $vars['event_details_field'] = $this->_rte_field('event_details', $event_details);
             $vars['start_time']   = htmlspecialchars($start_raw);
             $vars['end_time']     = htmlspecialchars($end_raw);
             $vars['status']       = in_array($status, ['open', 'closed']) ? $status : 'open';
             $vars['category_ids'] = $cat_ids;
+            $vars['url']          = htmlspecialchars($url);
+            $vars['banner_image_field'] = ee()->file_field->dragAndDropField('banner_image', $banner_image, 'all', 'image');
         }
 
         $this->_make_sidebar('create');
@@ -559,7 +748,7 @@ class Event_calendar_mcp
         $all_categories = $this->_load_categories($cat_group_id);
 
         $event = ee()->db
-            ->select('id, title, description, start_time, end_time, status')
+            ->select('id, title, slug, short_description, event_details, url, banner_image, start_time, end_time, status')
             ->where('id', $id)
             ->where('site_id', $site_id)
             ->where('rrule IS NULL', NULL, FALSE)
@@ -576,21 +765,28 @@ class Event_calendar_mcp
         ee()->cp->set_breadcrumb($this->base_url->compile(), lang('calendar_module_name'));
 
         $vars = [
-            'errors'         => [],
-            'event_id'       => $id,
-            'title'          => htmlspecialchars($event['title']),
-            'description'    => htmlspecialchars($event['description']),
-            'start_time'     => ee()->localize->format_date(ee()->localize->get_date_format(false, true), $event['start_time']),
-            'end_time'       => ee()->localize->format_date(ee()->localize->get_date_format(false, true), $event['end_time']),
-            'status'         => $event['status'],
-            'category_ids'   => $selected_cat_ids,
-            'all_categories' => $all_categories,
-            'form_url'       => ee('CP/URL')->make('addons/settings/event_calendar/edit/' . $id),
+            'errors'          => [],
+            'event_id'        => $id,
+            'title'           => htmlspecialchars($event['title']),
+            'slug'            => htmlspecialchars($event['slug']),
+            'short_description_field' => $this->_rte_field('short_description', $event['short_description'] ?? ''),
+            'event_details_field' => $this->_rte_field('event_details', $event['event_details'] ?? ''),
+            'url'         => htmlspecialchars($event['url'] ?? ''),
+            'banner_image_field' => ee()->file_field->dragAndDropField('banner_image', $event['banner_image'] ?? '', 'all', 'image'),
+            'start_time'  => ee()->localize->format_date(ee()->localize->get_date_format(false, true), $event['start_time']),
+            'end_time'        => ee()->localize->format_date(ee()->localize->get_date_format(false, true), $event['end_time']),
+            'status'          => $event['status'],
+            'category_ids'    => $selected_cat_ids,
+            'all_categories'  => $all_categories,
+            'form_url'        => ee('CP/URL')->make('addons/settings/event_calendar/edit/' . $id),
+            'name_badges'     => $this->_name_badges(['title', 'slug', 'start_time', 'end_time', 'status', 'banner_image', 'short_description', 'event_details', 'url', 'category_ids']),
         ];
 
         if (ee()->input->post('submit')) {
-            $title       = strip_tags(ee()->input->post('title'));
-            $description = strip_tags(ee()->input->post('description'));
+            $title              = strip_tags(ee()->input->post('title'));
+            $short_description  = $this->_save_rte((string) ee()->input->post('short_description'));
+            $event_details      = $this->_save_rte((string) ee()->input->post('event_details'));
+            $slug_raw    = trim(strip_tags((string) ee()->input->post('slug')));
             $start_raw   = ee()->input->post('start_time');
             $end_raw     = ee()->input->post('end_time');
             $start_time  = ee()->localize->string_to_timestamp($start_raw);
@@ -598,11 +794,20 @@ class Event_calendar_mcp
             $status      = ee()->input->post('status');
             $cat_ids_raw = ee()->input->post('category_ids');
             $cat_ids     = is_array($cat_ids_raw) ? array_map('intval', $cat_ids_raw) : [];
+            $url   = trim(strip_tags((string) ee()->input->post('url')));
+            $banner_image = strip_tags(trim((string) ee()->input->post('banner_image')));
+
+            $slug = $slug_raw === '' ? $this->_slugify($title) : strtolower($slug_raw);
 
             $errors = [];
 
             if ($title === '' || strlen($title) > 255) {
                 $errors[] = lang('title_required');
+            }
+            if (!preg_match('/^[a-z0-9][a-z0-9-]*$/', $slug) || strlen($slug) > 255) {
+                $errors[] = lang('slug_invalid');
+            } elseif (!$this->_slug_available($slug, $id)) {
+                $errors[] = lang('slug_taken');
             }
             if (!$start_time || $start_time <= 0) {
                 $errors[] = lang('start_time_invalid');
@@ -616,13 +821,20 @@ class Event_calendar_mcp
             if (!in_array($status, ['open', 'closed'])) {
                 $errors[] = lang('invalid_status');
             }
+            if (!$this->_validate_url($url)) {
+                $errors[] = lang('invalid_url');
+            }
 
             if (empty($errors)) {
                 ee()->db->update(
                     'exp_calendar_events',
                     [
-                        'title'       => $title,
-                        'description' => $description,
+                        'title'         => $title,
+                        'slug'          => $slug,
+                        'short_description' => $short_description,
+                        'event_details' => $event_details,
+                        'url'         => $url,
+                        'banner_image' => $banner_image,
                         'start_time'  => $start_time,
                         'end_time'    => $end_time,
                         'status'      => $status,
@@ -642,13 +854,17 @@ class Event_calendar_mcp
                 ee()->functions->redirect($this->base_url->compile());
             }
 
-            $vars['errors']       = $errors;
-            $vars['title']        = htmlspecialchars(ee()->input->post('title'));
-            $vars['description']  = htmlspecialchars(ee()->input->post('description'));
+            $vars['errors']              = $errors;
+            $vars['title']               = htmlspecialchars(ee()->input->post('title'));
+            $vars['slug']                = htmlspecialchars($slug);
+            $vars['short_description_field'] = $this->_rte_field('short_description', $short_description);
+            $vars['event_details_field'] = $this->_rte_field('event_details', $event_details);
             $vars['start_time']   = htmlspecialchars($start_raw);
             $vars['end_time']     = htmlspecialchars($end_raw);
             $vars['status']       = in_array($status, ['open', 'closed']) ? $status : 'open';
             $vars['category_ids'] = $cat_ids;
+            $vars['url']          = htmlspecialchars($url);
+            $vars['banner_image_field'] = ee()->file_field->dragAndDropField('banner_image', $banner_image, 'all', 'image');
         }
 
         $this->_make_sidebar('index');
@@ -737,20 +953,27 @@ class Event_calendar_mcp
         $vars = [
             'errors'         => [],
             'title'          => '',
-            'description'    => '',
+            'slug'           => '',
+            'short_description_field' => $this->_rte_field('short_description', ''),
+            'event_details_field' => $this->_rte_field('event_details', ''),
+            'url'            => '',
+            'banner_image_field' => ee()->file_field->dragAndDropField('banner_image', '', 'all', 'image'),
             'day_of_week'    => '',
-            'start_time'     => '',
-            'end_time'       => '',
-            'status'         => 'open',
-            'category_ids'   => [],
-            'all_categories' => $all_categories,
-            'days_options'   => $days_options,
-            'form_url'       => ee('CP/URL')->make('addons/settings/event_calendar/create_recurring'),
+            'start_time'      => '',
+            'end_time'        => '',
+            'status'          => 'open',
+            'category_ids'    => [],
+            'all_categories'  => $all_categories,
+            'days_options'    => $days_options,
+            'form_url'        => ee('CP/URL')->make('addons/settings/event_calendar/create_recurring'),
+            'name_badges'     => $this->_name_badges(['title', 'slug', 'day_of_week', 'start_time', 'end_time', 'status', 'banner_image', 'short_description', 'event_details', 'url', 'category_ids']),
         ];
 
         if (ee()->input->post('submit')) {
-            $title       = strip_tags(ee()->input->post('title'));
-            $description = strip_tags(ee()->input->post('description'));
+            $title              = strip_tags(ee()->input->post('title'));
+            $short_description  = $this->_save_rte((string) ee()->input->post('short_description'));
+            $event_details      = $this->_save_rte((string) ee()->input->post('event_details'));
+            $slug_raw    = trim(strip_tags((string) ee()->input->post('slug')));
             $dow_raw     = ee()->input->post('day_of_week');
             $dow         = ($dow_raw !== FALSE && $dow_raw !== '') ? (int) $dow_raw : -1;
             $start_raw   = (string) ee()->input->post('start_time'); // HH:MM
@@ -758,11 +981,20 @@ class Event_calendar_mcp
             $status      = ee()->input->post('status');
             $cat_ids_raw = ee()->input->post('category_ids');
             $cat_ids     = is_array($cat_ids_raw) ? array_map('intval', $cat_ids_raw) : [];
+            $url   = trim(strip_tags((string) ee()->input->post('url')));
+            $banner_image = strip_tags(trim((string) ee()->input->post('banner_image')));
+
+            $slug = $slug_raw === '' ? $this->_slugify($title) : strtolower($slug_raw);
 
             $errors = [];
 
             if ($title === '' || strlen($title) > 255) {
                 $errors[] = lang('title_required');
+            }
+            if (!preg_match('/^[a-z0-9][a-z0-9-]*$/', $slug) || strlen($slug) > 255) {
+                $errors[] = lang('slug_invalid');
+            } elseif (!$this->_slug_available($slug)) {
+                $errors[] = lang('slug_taken');
             }
             if ($dow < 0 || $dow > 6) {
                 $errors[] = lang('invalid_day_of_week');
@@ -781,6 +1013,9 @@ class Event_calendar_mcp
             if (!in_array($status, ['open', 'closed'])) {
                 $errors[] = lang('invalid_status');
             }
+            if (!$this->_validate_url($url)) {
+                $errors[] = lang('invalid_url');
+            }
 
             if (empty($errors)) {
                 $now     = ee()->localize->now;
@@ -791,14 +1026,16 @@ class Event_calendar_mcp
                 ee()->db->insert('exp_calendar_events', [
                     'site_id'        => $site_id,
                     'title'          => $title,
-                    'slug'           => '',
-                    'description'    => $description,
-                    'location'       => '',
-                    'url'            => '',
-                    'start_time'     => $start_time,
-                    'end_time'       => $end_time,
-                    'all_day'        => 0,
-                    'rrule'          => $rrule,
+                    'slug'           => $slug,
+                    'short_description' => $short_description,
+                    'event_details'  => $event_details,
+                    'location'   => '',
+                    'url'        => $url,
+                    'banner_image' => $banner_image,
+                    'start_time' => $start_time,
+                    'end_time'   => $end_time,
+                    'all_day'    => 0,
+                    'rrule'      => $rrule,
                     'recurrence_end' => null,
                     'status'         => $status,
                     'created_at'     => $now,
@@ -817,14 +1054,18 @@ class Event_calendar_mcp
                 ee()->functions->redirect($this->base_url->compile());
             }
 
-            $vars['errors']       = $errors;
-            $vars['title']        = htmlspecialchars(ee()->input->post('title'));
-            $vars['description']  = htmlspecialchars(ee()->input->post('description'));
+            $vars['errors']              = $errors;
+            $vars['title']               = htmlspecialchars(ee()->input->post('title'));
+            $vars['slug']                = htmlspecialchars($slug);
+            $vars['short_description_field'] = $this->_rte_field('short_description', $short_description);
+            $vars['event_details_field'] = $this->_rte_field('event_details', $event_details);
             $vars['day_of_week']  = $dow_raw;
             $vars['start_time']   = htmlspecialchars($start_raw);
             $vars['end_time']     = htmlspecialchars($end_raw);
             $vars['status']       = in_array($status, ['open', 'closed']) ? $status : 'open';
             $vars['category_ids'] = $cat_ids;
+            $vars['url']          = htmlspecialchars($url);
+            $vars['banner_image_field'] = ee()->file_field->dragAndDropField('banner_image', $banner_image, 'all', 'image');
         }
 
         $this->_make_sidebar('create_recurring');
@@ -853,7 +1094,7 @@ class Event_calendar_mcp
         $all_categories = $this->_load_categories($cat_group_id);
 
         $event = ee()->db
-            ->select('id, title, description, start_time, end_time, status, rrule')
+            ->select('id, title, slug, short_description, event_details, url, banner_image, start_time, end_time, status, rrule')
             ->where('id', $id)
             ->where('site_id', $site_id)
             ->where('rrule IS NOT NULL', NULL, FALSE)
@@ -886,23 +1127,30 @@ class Event_calendar_mcp
         }
 
         $vars = [
-            'errors'         => [],
-            'event_id'       => $id,
-            'title'          => htmlspecialchars($event['title']),
-            'description'    => htmlspecialchars($event['description']),
-            'day_of_week'    => $dow_from_rrule,
-            'start_time'     => date('H:i', (int) $event['start_time']),
-            'end_time'       => date('H:i', (int) $event['end_time']),
-            'status'         => $event['status'],
-            'category_ids'   => $selected_cat_ids,
-            'all_categories' => $all_categories,
-            'days_options'   => $days_options,
-            'form_url'       => ee('CP/URL')->make('addons/settings/event_calendar/edit_recurring/' . $id),
+            'errors'          => [],
+            'event_id'        => $id,
+            'title'           => htmlspecialchars($event['title']),
+            'slug'            => htmlspecialchars($event['slug']),
+            'short_description_field' => $this->_rte_field('short_description', $event['short_description'] ?? ''),
+            'event_details_field' => $this->_rte_field('event_details', $event['event_details'] ?? ''),
+            'url'         => htmlspecialchars($event['url'] ?? ''),
+            'banner_image_field' => ee()->file_field->dragAndDropField('banner_image', $event['banner_image'] ?? '', 'all', 'image'),
+            'day_of_week' => $dow_from_rrule,
+            'start_time'      => date('H:i', (int) $event['start_time']),
+            'end_time'        => date('H:i', (int) $event['end_time']),
+            'status'          => $event['status'],
+            'category_ids'    => $selected_cat_ids,
+            'all_categories'  => $all_categories,
+            'days_options'    => $days_options,
+            'form_url'        => ee('CP/URL')->make('addons/settings/event_calendar/edit_recurring/' . $id),
+            'name_badges'     => $this->_name_badges(['title', 'slug', 'day_of_week', 'start_time', 'end_time', 'status', 'banner_image', 'short_description', 'event_details', 'url', 'category_ids']),
         ];
 
         if (ee()->input->post('submit')) {
-            $title       = strip_tags(ee()->input->post('title'));
-            $description = strip_tags(ee()->input->post('description'));
+            $title              = strip_tags(ee()->input->post('title'));
+            $short_description  = $this->_save_rte((string) ee()->input->post('short_description'));
+            $event_details      = $this->_save_rte((string) ee()->input->post('event_details'));
+            $slug_raw    = trim(strip_tags((string) ee()->input->post('slug')));
             $dow_raw     = ee()->input->post('day_of_week');
             $dow         = ($dow_raw !== FALSE && $dow_raw !== '') ? (int) $dow_raw : -1;
             $start_raw   = (string) ee()->input->post('start_time'); // HH:MM
@@ -910,11 +1158,20 @@ class Event_calendar_mcp
             $status      = ee()->input->post('status');
             $cat_ids_raw = ee()->input->post('category_ids');
             $cat_ids     = is_array($cat_ids_raw) ? array_map('intval', $cat_ids_raw) : [];
+            $url   = trim(strip_tags((string) ee()->input->post('url')));
+            $banner_image = strip_tags(trim((string) ee()->input->post('banner_image')));
+
+            $slug = $slug_raw === '' ? $this->_slugify($title) : strtolower($slug_raw);
 
             $errors = [];
 
             if ($title === '' || strlen($title) > 255) {
                 $errors[] = lang('title_required');
+            }
+            if (!preg_match('/^[a-z0-9][a-z0-9-]*$/', $slug) || strlen($slug) > 255) {
+                $errors[] = lang('slug_invalid');
+            } elseif (!$this->_slug_available($slug, $id)) {
+                $errors[] = lang('slug_taken');
             }
             if ($dow < 0 || $dow > 6) {
                 $errors[] = lang('invalid_day_of_week');
@@ -933,6 +1190,9 @@ class Event_calendar_mcp
             if (!in_array($status, ['open', 'closed'])) {
                 $errors[] = lang('invalid_status');
             }
+            if (!$this->_validate_url($url)) {
+                $errors[] = lang('invalid_url');
+            }
 
             if (empty($errors)) {
                 $byday = ['SU','MO','TU','WE','TH','FR','SA'][$dow];
@@ -941,13 +1201,17 @@ class Event_calendar_mcp
                 ee()->db->update(
                     'exp_calendar_events',
                     [
-                        'title'       => $title,
-                        'description' => $description,
+                        'title'         => $title,
+                        'slug'          => $slug,
+                        'short_description' => $short_description,
+                        'event_details' => $event_details,
+                        'url'         => $url,
+                        'banner_image' => $banner_image,
                         'start_time'  => $start_time,
                         'end_time'    => $end_time,
                         'rrule'       => $rrule,
-                        'status'      => $status,
-                        'updated_at'  => ee()->localize->now,
+                        'status'        => $status,
+                        'updated_at'    => ee()->localize->now,
                     ],
                     ['id' => $id, 'site_id' => $site_id]
                 );
@@ -963,14 +1227,18 @@ class Event_calendar_mcp
                 ee()->functions->redirect($this->base_url->compile());
             }
 
-            $vars['errors']       = $errors;
-            $vars['title']        = htmlspecialchars(ee()->input->post('title'));
-            $vars['description']  = htmlspecialchars(ee()->input->post('description'));
+            $vars['errors']              = $errors;
+            $vars['title']               = htmlspecialchars(ee()->input->post('title'));
+            $vars['slug']                = htmlspecialchars($slug);
+            $vars['short_description_field'] = $this->_rte_field('short_description', $short_description);
+            $vars['event_details_field'] = $this->_rte_field('event_details', $event_details);
             $vars['day_of_week']  = $dow_raw;
             $vars['start_time']   = htmlspecialchars($start_raw);
             $vars['end_time']     = htmlspecialchars($end_raw);
             $vars['status']       = in_array($status, ['open', 'closed']) ? $status : 'open';
             $vars['category_ids'] = $cat_ids;
+            $vars['url']          = htmlspecialchars($url);
+            $vars['banner_image_field'] = ee()->file_field->dragAndDropField('banner_image', $banner_image, 'all', 'image');
         }
 
         $this->_make_sidebar('index');
@@ -995,6 +1263,72 @@ class Event_calendar_mcp
         return [
             'body'       => ee('View')->make('event_calendar:events/templates')->render([]),
             'heading'    => lang('templates'),
+            'breadcrumb' => [
+                $this->base_url->compile() => lang('calendar_module_name'),
+            ],
+        ];
+    }
+
+    // -------------------------------------------------------------------------
+
+    public function settings()
+    {
+        $site_id  = (int) ee()->config->item('site_id');
+        $settings = $this->_load_settings();
+        $errors   = [];
+
+        $url_style = $settings['url_style'] ?? 'clean';
+
+        if (ee()->input->post('submit')) {
+            $url       = strip_tags(trim((string) ee()->input->post('calendar_page_url')));
+            $url_style = ee()->input->post('url_style') === 'index' ? 'index' : 'clean';
+
+            if ($url !== ''
+                && !filter_var($url, FILTER_VALIDATE_URL)
+                && strpos($url, '/') !== 0) {
+                $errors[] = lang('calendar_page_url_invalid');
+            }
+
+            if (strlen($url) > 512) {
+                $errors[] = lang('calendar_page_url_invalid');
+            }
+
+            if (empty($errors)) {
+                ee()->db->update(
+                    'event_calendar_settings',
+                    [
+                        'calendar_page_url' => $url,
+                        'url_style'         => $url_style,
+                        'updated_at'        => ee()->localize->now,
+                    ],
+                    ['site_id' => $site_id]
+                );
+
+                $this->_sync_strict_urls($url_style);
+
+                ee('CP/Alert')->makeInline('event-calendar-success')
+                    ->asSuccess()
+                    ->withTitle(lang('settings_saved'))
+                    ->defer();
+
+                ee()->functions->redirect(
+                    ee('CP/URL')->make('addons/settings/event_calendar/settings')->compile()
+                );
+            }
+        }
+
+        ee()->view->cp_page_title = lang('calendar_module_name') . ' - ' . lang('page_settings');
+        ee()->cp->set_breadcrumb($this->base_url->compile(), lang('calendar_module_name'));
+        $this->_make_sidebar('settings');
+
+        return [
+            'body'       => ee('View')->make('event_calendar:events/settings')->render([
+                'errors'            => $errors,
+                'calendar_page_url' => htmlspecialchars($settings['calendar_page_url'] ?? ''),
+                'url_style'         => $url_style,
+                'form_url'          => ee('CP/URL')->make('addons/settings/event_calendar/settings'),
+            ]),
+            'heading'    => lang('page_settings'),
             'breadcrumb' => [
                 $this->base_url->compile() => lang('calendar_module_name'),
             ],

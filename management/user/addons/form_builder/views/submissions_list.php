@@ -145,8 +145,6 @@
 </div>
 
 <style>
-    .form-builder-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
-    .form-builder-row-actions .btn { margin: 0; }
     #pagination-goto::-webkit-inner-spin-button,
     #pagination-goto::-webkit-outer-spin-button {
         -webkit-appearance: none;
@@ -199,4 +197,6 @@
         line-height: 1.4;
         word-break: break-word;
     }
+    .form-builder-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+    .form-builder-row-actions .btn { margin: 0; }
 </style>

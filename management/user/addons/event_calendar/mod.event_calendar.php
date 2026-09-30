@@ -3,6 +3,7 @@
 require_once __DIR__ . '/vendor/autoload.php';
 
 use Propagate\EventCalendar\Service\RecurrenceExpander;
+use ExpressionEngine\Addons\Rte\RteHelper;
 
 class Event_calendar
 {
@@ -12,6 +13,8 @@ class Event_calendar
 
     public function events_list()
     {
+        ee()->load->library('typography');
+
         $site_id     = ee()->config->item('site_id');
 
         $param_limit = ee()->TMPL->fetch_param('limit');
@@ -22,12 +25,21 @@ class Event_calendar
         $single     = ee()->TMPL->fetch_param('single',     'yes');
         $recurring  = ee()->TMPL->fetch_param('recurring',  'yes');
         $status     = ee()->TMPL->fetch_param('status',     'open');
+        $detail_url = rtrim((string) ee()->TMPL->fetch_param('detail_url', ''), '/');
         $var_prefix = ee()->TMPL->fetch_param('var_prefix', '');
         $prefix     = ($var_prefix !== '' && $var_prefix !== FALSE)
             ? rtrim($var_prefix, ':') . ':'
             : '';
         $now        = ee()->localize->now;
         $far_future = strtotime('+5 years', $now);
+
+        try {
+            $settings_row_list = ee()->db->select('url_style')->where('site_id', $site_id)
+                                         ->get('exp_event_calendar_settings')->row_array();
+        } catch (\Throwable $e) {
+            $settings_row_list = [];
+        }
+        $url_style_list = $settings_row_list['url_style'] ?? 'clean';
 
         // Month filtering — defaults to current month
         $month_param = ee()->TMPL->fetch_param('month', 'current');
@@ -59,7 +71,7 @@ class Event_calendar
             }
         }
 
-        ee()->db->select('id, title, description, start_time, end_time, rrule,
+        ee()->db->select('id, title, slug, short_description, url, banner_image, start_time, end_time, rrule,
                           recurrence_end, status,
                           IF(rrule IS NULL, "single", "recurring") AS event_type', FALSE)
                 ->where('site_id', $site_id);
@@ -133,11 +145,27 @@ class Event_calendar
                         . ', ' . ee()->localize->format_date('%g:%i %A', $start_ts)
                         . ' – '  . ee()->localize->format_date('%g:%i %A', $end_ts);
 
+            $short_description = (string) ($event['short_description'] ?? '');
+            RteHelper::replaceFileTags($short_description);
+            RteHelper::replacePageTags($short_description);
+
+            $is_recurring_ev = !empty($event['rrule']);
+            $event_url = '';
+            if ($detail_url !== '' && !empty($event['slug'])) {
+                $event_url = $url_style_list === 'index'
+                    ? $detail_url . '/index/' . $event['slug']
+                    : $detail_url . '/' . $event['slug'];
+                if ($is_recurring_ev) {
+                    $event_url .= '/' . date('Y-m-d', $start_ts);
+                }
+            }
+
             $row = [
                 'event_id'        => (int) $event['id'],
                 'event_type'      => $event['event_type'],
                 'title'           => htmlspecialchars($event['title']),
-                'description'     => strip_tags(ee()->typography->auto_typography($event['description'])),
+                'slug'            => htmlspecialchars($event['slug']),
+                'short_description' => $short_description,
                 'date_key'        => date('Y-m-d', $start_ts),
                 'day_num'         => $day_n,
                 'date_line'       => htmlspecialchars($date_line),
@@ -148,6 +176,7 @@ class Event_calendar
                 'status'          => $event['status'],
                 'day_of_week'     => date('l', $start_ts),
                 'day_of_week_int' => (int) date('w', $start_ts),
+                'event_url'       => htmlspecialchars($event_url),
                 'categories'      => $cat_map[(int) $event['id']] ?? [],
             ];
 
@@ -257,6 +286,134 @@ class Event_calendar
 
     // -------------------------------------------------------------------------
 
+    public function event_detail()
+    {
+        $site_id     = (int) ee()->config->item('site_id');
+
+        try {
+            $settings_row = ee()->db->select('url_style')->where('site_id', $site_id)
+                                    ->get('exp_event_calendar_settings')->row_array();
+        } catch (\Throwable $e) {
+            $settings_row = [];
+        }
+        $use_index = ($settings_row['url_style'] ?? 'clean') === 'index';
+
+        $slug_seg = (int) ee()->TMPL->fetch_param('slug_segment', $use_index ? 3 : 2);
+        $date_seg = (int) ee()->TMPL->fetch_param('date_segment', $use_index ? 4 : 3);
+        $date_format = ee()->TMPL->fetch_param('date_format', '%F %j, %Y');
+        $time_format = ee()->TMPL->fetch_param('time_format', '%g:%i %A');
+
+        $slug = (string) ee()->uri->segment($slug_seg);
+        if ($slug === '') {
+            return ee()->TMPL->no_results();
+        }
+
+        $row = ee()->db
+            ->select('id, title, slug, short_description, event_details, location, url, banner_image, start_time, end_time,
+                      all_day, rrule, recurrence_end, status', FALSE)
+            ->where('slug', $slug)
+            ->where('site_id', $site_id)
+            ->where('status', 'open')
+            ->get('exp_calendar_events')
+            ->row_array();
+
+        if (!$row) {
+            return ee()->TMPL->no_results();
+        }
+
+        ee()->load->library('typography');
+
+        $banner_image = '';
+        if (!empty($row['banner_image'])) {
+            $img_file = null;
+            if (preg_match('/^\{file:(\d+):url\}$/', $row['banner_image'], $img_m)) {
+                $img_file = ee('Model')->get('File', (int) $img_m[1])->first();
+            } elseif (preg_match('/^\{filedir_(\d+)\}(.+)$/', $row['banner_image'], $img_m)) {
+                $img_file = ee('Model')->get('File')
+                    ->with('UploadDestination')
+                    ->filter('file_name', $img_m[2])
+                    ->filter('upload_location_id', (int) $img_m[1])
+                    ->filter('site_id', $site_id)
+                    ->first();
+            }
+            $banner_image = $img_file ? htmlspecialchars($img_file->getAbsoluteURL()) : '';
+        }
+
+        $event_details = (string) ($row['event_details'] ?? '');
+        RteHelper::replaceFileTags($event_details);
+        RteHelper::replacePageTags($event_details);
+
+        $short_description = (string) ($row['short_description'] ?? '');
+        RteHelper::replaceFileTags($short_description);
+        RteHelper::replacePageTags($short_description);
+
+        $is_recurring = $row['rrule'] !== null && $row['rrule'] !== '';
+        $occ_start    = (int) $row['start_time'];
+        $occ_end      = (int) $row['end_time'];
+
+        $date_key_raw = (string) ee()->uri->segment($date_seg);
+        if ($is_recurring && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_key_raw)) {
+            $expander    = new RecurrenceExpander();
+            $day_start   = ee()->localize->string_to_timestamp($date_key_raw . ' 00:00:00');
+            $day_end     = ee()->localize->string_to_timestamp($date_key_raw . ' 23:59:59');
+            $duration    = $occ_end - $occ_start;
+            $occurrences = $expander->expand($row['rrule'], $occ_start, $day_start, $day_end);
+            if (!empty($occurrences)) {
+                $occ_start = $occurrences[0];
+                $occ_end   = $occ_start + $duration;
+            }
+        }
+
+        $date_key  = ee()->localize->format_date('%Y-%m-%d', $occ_start);
+        $day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+        $settings_row      = ee()->db->select('calendar_page_url')->where('site_id', $site_id)
+                                     ->get('exp_event_calendar_settings')->row_array();
+        $calendar_page_url = htmlspecialchars($settings_row['calendar_page_url'] ?? '');
+
+        $variables = [[
+            'event_id'          => (int) $row['id'],
+            'event_type'      => $is_recurring ? 'recurring' : 'single',
+            'title'           => htmlspecialchars($row['title']),
+            'slug'            => $row['slug'],
+            'short_description' => $short_description,
+            'event_details'   => $event_details,
+            'location'        => htmlspecialchars($row['location']),
+            'event_url'             => htmlspecialchars(
+                                           strncmp($row['url'], '/', 1) === 0 && strncmp($row['url'], '//', 2) !== 0
+                                               ? rtrim((string) ee()->config->item('site_url'), '/') . $row['url']
+                                               : $row['url']
+                                       ),
+            'event_url_is_external' => preg_match('/^https?:\/\//', $row['url']) ? 'y' : 'n',
+            'banner_image'          => $banner_image,
+            'all_day'         => (bool) $row['all_day'] ? 'yes' : 'no',
+            'start_date'      => ee()->localize->format_date($date_format, $occ_start),
+            'end_date'        => ee()->localize->format_date($date_format, $occ_end),
+            'start_time'      => ee()->localize->format_date($time_format, $occ_start),
+            'end_time'        => ee()->localize->format_date($time_format, $occ_end),
+            'start_time_raw'  => $occ_start,
+            'end_time_raw'    => $occ_end,
+            'date_key'        => $date_key,
+            'day_of_week'     => $day_names[(int) ee()->localize->format_date('%w', $occ_start)],
+            'day_of_week_int' => (int) ee()->localize->format_date('%w', $occ_start),
+            'status'            => $row['status'],
+            'rrule'             => $row['rrule'] ?? '',
+            'calendar_page_url' => $calendar_page_url,
+        ]];
+
+        $page_title = htmlspecialchars($row['title'], ENT_QUOTES)
+            . ' | ' . htmlspecialchars((string) ee()->config->item('site_name'), ENT_QUOTES);
+        ee()->TMPL->template = preg_replace(
+            '~<title>[^<]*</title>~',
+            '<title>' . $page_title . '</title>',
+            (string) ee()->TMPL->template
+        );
+
+        return ee()->TMPL->parse_variables(ee()->TMPL->tagdata, $variables);
+    }
+
+    // -------------------------------------------------------------------------
+
     public function display()
     {
         $site_id     = (int) ee()->config->item('site_id');
@@ -264,20 +421,34 @@ class Event_calendar
         $time_format = ee()->TMPL->fetch_param('time_format', '%g:%i %A');
         $fmt         = $date_format . ' - ' . $time_format;
 
-        $single    = ee()->TMPL->fetch_param('single',    'yes');
-        $recurring = ee()->TMPL->fetch_param('recurring', 'yes');
-        $status    = ee()->TMPL->fetch_param('status',    'open');
-        $show_meta = ee()->TMPL->fetch_param('show_meta', 'yes');
-        $meta_text = ee()->TMPL->fetch_param('meta_text',
+        $single     = ee()->TMPL->fetch_param('single',     'yes');
+        $recurring  = ee()->TMPL->fetch_param('recurring',  'yes');
+        $status     = ee()->TMPL->fetch_param('status',     'open');
+        $detail_url = rtrim((string) ee()->TMPL->fetch_param('detail_url', ''), '/');
+        $show_meta  = ee()->TMPL->fetch_param('show_meta', 'yes');
+
+        try {
+            $settings_row = ee()->db->select('url_style')->where('site_id', $site_id)
+                                    ->get('exp_event_calendar_settings')->row_array();
+        } catch (\Throwable $e) {
+            $settings_row = [];
+        }
+        $url_style = ($settings_row['url_style'] ?? 'clean');
+        $meta_text  = ee()->TMPL->fetch_param('meta_text',
             'Days in red have events or entertainment.<br>Click on a day to jump to it.');
-        $now       = ee()->localize->now;
+        $now        = ee()->localize->now;
 
         $nonce     = ee()->functions->random('encrypt', 32);
         $nonce_key = 'event_calendar/nonce/' . $nonce;
         ee()->cache->save($nonce_key, '1', 7200, Cache::LOCAL_SCOPE);
 
-        $action_id = ee()->functions->fetch_action_id('Event_calendar', 'fetch_events');
-        $fetch_url = ee()->functions->create_url('?ACT=' . $action_id);
+        $action_row = ee()->db->select('action_id')
+                              ->where('class', 'Event_calendar')
+                              ->where('method', 'fetch_events')
+                              ->get('actions')
+                              ->row_array();
+        $action_id  = (int) ($action_row['action_id'] ?? 0);
+        $fetch_url  = rtrim(ee()->config->item('site_url'), '/') . '?ACT=' . $action_id;
 
         $current_month = ee()->localize->format_date('%Y-%m', $now);
         $today         = ee()->localize->format_date('%Y-%m-%d', $now);
@@ -312,6 +483,8 @@ class Event_calendar
             'single'        => $single,
             'recurring'     => $recurring,
             'status'        => $status,
+            'detail_url'    => $detail_url,
+            'url_style'     => $url_style,
         ];
 
         $month_names   = ['January','February','March','April','May','June',
@@ -344,10 +517,36 @@ class Event_calendar
             . $meta_html
             . '</div>';
 
-        $json   = json_encode($calendar_data, JSON_HEX_TAG);
-        $js_url = ee()->config->item('theme_folder_url') . 'user/addons/event_calendar/calendar.js';
+        $json      = json_encode($calendar_data, JSON_HEX_TAG);
+        $source_js = __DIR__ . '/assets/calendar.js';
 
-        return '<script>window.CalendarData = ' . $json . ';</script>' . "\n"
+        $theme_dest = rtrim(ee()->config->item('theme_folder_path'), '/\\')
+                    . '/user/addons/event_calendar/';
+        $theme_js   = $theme_dest . 'calendar.js';
+
+        if (!file_exists($theme_js) || md5_file($source_js) !== md5_file($theme_js)) {
+            if (!is_dir($theme_dest)) {
+                @mkdir($theme_dest, 0755, TRUE);
+            }
+            @copy($source_js, $theme_js);
+        }
+
+        if (file_exists($theme_js)) {
+            $js_url = rtrim(ee()->config->item('theme_folder_url'), '/') . '/user/addons/event_calendar/calendar.js?v=' . filemtime($theme_js);
+        } else {
+            // Theme copy failed (permissions) — serve directly from addon assets
+            $doc_root   = rtrim((string) ($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+            $source_real = (string) realpath($source_js);
+            $js_path    = ($doc_root !== '' && strpos($source_real, $doc_root) === 0)
+                ? substr($source_real, strlen($doc_root))
+                : '/management/user/addons/event_calendar/assets/calendar.js';
+            $js_url     = rtrim(ee()->config->item('site_url'), '/') . $js_path . '?v=' . filemtime($source_js);
+        }
+
+        // base64 has no { or } so EE's template parser cannot corrupt it
+        $b64 = base64_encode($json);
+
+        return '<script>window.CalendarData = JSON.parse(atob("' . $b64 . '"));</script>' . "\n"
             . '<script src="' . htmlspecialchars($js_url, ENT_QUOTES) . '"></script>' . "\n"
             . $widget;
     }
@@ -469,7 +668,7 @@ class Event_calendar
     private function _query_events_for_range(
         $site_id, $month_start, $month_end, $status, $single, $recurring, $fmt
     ): array {
-        ee()->db->select('id, title, description, start_time, end_time, rrule, recurrence_end, status', FALSE)
+        ee()->db->select('id, slug, title, short_description, start_time, end_time, rrule, recurrence_end, status', FALSE)
                 ->where('site_id', $site_id)
                 ->where('start_time <=', $month_end)
                 ->where('(rrule IS NULL OR recurrence_end IS NULL OR recurrence_end >= ' . (int) $month_start . ')', NULL, FALSE);
@@ -485,6 +684,10 @@ class Event_calendar
         foreach ($rows as $row) {
             $is_recurring = $row['rrule'] !== null && $row['rrule'] !== '';
 
+            $short_description = (string) ($row['short_description'] ?? '');
+            RteHelper::replaceFileTags($short_description);
+            RteHelper::replacePageTags($short_description);
+
             if ($is_recurring) {
                 if ($recurring !== 'yes') continue;
 
@@ -498,8 +701,9 @@ class Event_calendar
                 foreach ($occurrences as $occ_start) {
                     $events[] = [
                         'id'             => (int) $row['id'],
+                        'slug'           => $row['slug'],
                         'title'          => htmlspecialchars($row['title']),
-                        'description'    => ee()->typography->auto_typography($row['description']),
+                        'short_description' => $short_description,
                         'start_time'     => ee()->localize->format_date($fmt, $occ_start),
                         'end_time'       => ee()->localize->format_date($fmt, $occ_start + $duration),
                         'start_time_raw' => $occ_start,
@@ -515,8 +719,9 @@ class Event_calendar
 
                 $events[] = [
                     'id'             => (int) $row['id'],
+                    'slug'           => $row['slug'],
                     'title'          => htmlspecialchars($row['title']),
-                    'description'    => ee()->typography->auto_typography($row['description']),
+                    'short_description' => $short_description,
                     'start_time'     => ee()->localize->format_date($fmt, $row['start_time']),
                     'end_time'       => ee()->localize->format_date($fmt, $row['end_time']),
                     'start_time_raw' => (int) $row['start_time'],

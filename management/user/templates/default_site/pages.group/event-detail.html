@@ -1,0 +1,29 @@
+{head}
+{navigation}
+
+{exp:event_calendar:event_detail id_segment="3" date_segment="4"}
+<section class="sec fade-in py-5">
+  <div class="container">
+
+    <h1>{title}</h1>
+
+    <p class="date mb-1">{start_date}</p>
+    <p class="mb-3">{start_time} &ndash; {end_time}</p>
+
+    {if location}
+    <p class="mb-3"><strong>Location:</strong> {location}</p>
+    {/if}
+
+    {description}
+
+    {if event_url}
+    <p class="mt-3"><a class="cta" href="{event_url}">More Info</a></p>
+    {/if}
+
+    <p class="mt-4"><a href="{path='pages/calendar-list'}">&larr; Back to Events</a></p>
+
+  </div>
+</section>
+{/exp:event_calendar:event_detail}
+
+{footer}

@@ -13,6 +13,9 @@
  * @var array  $all_categories Available categories [{cat_id, cat_name}]
  */
 ?>
+<style>
+.ec-act-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+</style>
 <div class="tbl-ctrls">
     <div id="event-filters" data-base-url="<?= htmlspecialchars($base_url->compile()) ?>">
         <label for="per_page"><?= lang('per_page') ?></label>

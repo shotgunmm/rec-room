@@ -203,15 +203,30 @@
         }
     }
 
+    function eventDetailUrl(ev) {
+        var base = CalendarData.detail_url;
+        if (!base || !ev.slug) return '';
+        var url = CalendarData.url_style === 'index'
+            ? base + '/index/' + ev.slug
+            : base + '/' + ev.slug;
+        if (ev.event_type === 'recurring') url += '/' + ev.date_key;
+        return url;
+    }
+
     function renderDetails(detailsEl, dateKey) {
         var events = getEventsForDate(dateKey);
         if (events.length > 0) {
             var html = '';
             events.forEach(function (ev) {
+                var url       = eventDetailUrl(ev);
+                var titleHtml = url
+                    ? '<a href="' + url + '">' + ev.title + '</a>'
+                    : ev.title;
                 html += '<div data-calendar-event>'
-                    + '<h3>' + ev.title + '</h3>'
+                    + '<h3>' + titleHtml + '</h3>'
                     + '<p>' + ev.start_time + ' – ' + ev.end_time + '</p>'
-                    + ev.description
+                    + ev.short_description
+                    + (url ? '<p><a class="cta" href="' + url + '">Learn More</a></p>' : '')
                     + '</div>';
             });
             detailsEl.innerHTML = html;
@@ -257,12 +272,11 @@
         }
 
         var html = '';
-        filtered.forEach(function (ev, i) {
-            var dayNum  = parseInt(ev.date_key.substr(8, 2), 10);
-            var isFirst = i === 0;
+        filtered.forEach(function (ev) {
+            var dayNum = parseInt(ev.date_key.substr(8, 2), 10);
+            var url    = eventDetailUrl(ev);
 
-            html += '<div class="event-collapse' + (isFirst ? ' clicked' : '') + '"'
-                + ' data-event-date="' + ev.date_key + '">';
+            html += '<div class="event-collapse" data-event-date="' + ev.date_key + '">';
 
             html += '<div class="event-head d-flex">';
             html += '<div class="date d-flex justify-content-center align-items-center">'
@@ -274,18 +288,18 @@
             html += '<p>' + formatEventDateLine(ev) + '</p>';
             html += '</div>';
             html += '<div class="more d-flex align-items-center mt-3 mt-md-0">'
-                + 'Learn More<span class="icon ms-1">' + (isFirst ? '-' : '+') + '</span></div>';
+                + 'Learn More<span class="icon ms-1">+</span></div>';
             html += '</div>';
             html += '</div>';
 
-            html += '<div class="event-content"' + (isFirst ? ' style="display:block"' : '') + '>';
-            html += '<div class="text">';
-            if (ev.description) {
-                html += '<h2>About</h2>' + ev.description;
+            html += '<div class="event-content"><div class="text">';
+            if (ev.short_description) {
+                html += '<h2>About</h2>' + ev.short_description;
             }
-            html += '</div>';
-            html += '</div>';
-
+            if (url) {
+                html += '<p><a class="cta d-inline-flex align-items-center justify-content-center rounded-3 py-2 px-4 text-uppercase text-decoration-none" href="' + url + '">View Full Details</a></p>';
+            }
+            html += '</div></div>';
             html += '</div>';
         });
 
@@ -313,31 +327,6 @@
         });
     }
 
-    // Scroll to the first event-collapse for dateKey and expand it
-    function scrollToEvent(dateKey) {
-        var listEl = document.querySelector('[data-calendar-event-list]');
-        if (!listEl) return;
-
-        var target = listEl.querySelector('[data-event-date="' + dateKey + '"]');
-        if (!target) return;
-
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
-        if (!target.classList.contains('clicked')) {
-            // Trigger app.js jQuery handler if available, else open directly
-            var moreBtn = target.querySelector('.more');
-            if (moreBtn) {
-                moreBtn.click();
-            } else {
-                target.classList.add('clicked');
-                var content = target.querySelector('.event-content');
-                var icon    = target.querySelector('.icon');
-                if (content) content.style.display = 'block';
-                if (icon)    icon.textContent = '-';
-            }
-        }
-    }
-
     // -------------------------------------------------------------------------
     // Circle text
     // -------------------------------------------------------------------------
@@ -356,9 +345,11 @@
         }
         var html = '<div class="head mb-3"><h2>' + formatDateLabel(dateKey) + '</h2></div>';
         events.forEach(function (ev) {
-            html += '<p class="mb-0"><strong>' + ev.title + '</strong><br>'
+            var url = eventDetailUrl(ev);
+            html += '<p><strong>' + ev.title + '</strong><br>'
                 + extractTime(ev.start_time) + ' – ' + extractTime(ev.end_time) + '</p>'
-                + (ev.description ? ev.description : '');
+                + (ev.short_description ? ev.short_description : '')
+                + (url ? '<a class="cta mt-3 d-inline-block" href="' + url + '">See Details</a>' : '');
         });
         circleTextEl.innerHTML = html;
     }

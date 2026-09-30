@@ -46,9 +46,9 @@
         </div>
     </fieldset>
 
-    <div class="form-btns">
+    <div class="form-btns" style="text-align: left;">
         <?php if (!empty($groups)): ?>
-            <input type="submit" name="submit" value="<?= lang('save') ?>" class="button button--primary" data-submit-text="<?= lang('save') ?>" data-work-text="<?= lang('btn_saving') ?>">
+            <input type="submit" name="submit" value="<?= lang('save') ?>" class="button button--primary" data-submit-text="<?= lang('save') ?>" data-work-text="<?= lang('btn_saving') ?>" data-shortcut="s">
         <?php endif ?>
         <a href="<?= htmlspecialchars($create_group_url) ?>" class="button button--default">
             <?= lang('setup_create_new_group') ?>

@@ -1,7 +1,46 @@
 <style>
-.title-bar__extra-tools .btn + .btn { margin-left: 8px; }
+.title-bar__extra-tools { align-items: center; }
+.title-bar__extra-tools .add-field-picker { margin-left: 10px; }
 .form-builder-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
 .form-builder-row-actions .btn { margin: 0; }
+.add-field-picker { position: relative; display: inline-block; }
+.add-field-picker details { display: inline-block; margin: 0; padding: 0; }
+.add-field-picker details > summary { list-style: none; cursor: pointer; }
+.add-field-picker details > summary::-webkit-details-marker { display: none; }
+.add-field-picker details > summary::before { content: none; }
+.add-field-picker details > summary::after { font-family: "Font Awesome 6 Pro"; font-weight: 600; content: '\f054'; font-size: 10px; display: inline-block; margin-left: 5px; position: relative; top: -1px; transition: transform 0.15s ease; }
+.add-field-picker details[open] > summary::after { transform: rotate(90deg); }
+.add-field-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    min-width: 220px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    padding: 6px 0;
+    z-index: 1000;
+}
+.add-field-menu__header {
+    font-size: 0.7em;
+    text-transform: uppercase;
+    color: #888;
+    padding: 8px 14px 4px;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+.add-field-menu__item {
+    display: block;
+    padding: 6px 14px;
+    color: #333;
+    text-decoration: none;
+}
+.add-field-menu__item:hover {
+    background: #f0f4ff;
+    text-decoration: none;
+}
 </style>
 <div class="panel">
     <div class="panel-heading">
@@ -9,7 +48,22 @@
             <h3 class="title-bar__title"><?= lang('form_builder_fields') ?>: <?= htmlspecialchars($form['form_label']) ?></h3>
             <div class="title-bar__extra-tools">
                 <a href="<?= ee('CP/URL', 'addons/settings/form_builder/edit_form/' . $form['form_id']) ?>" class="btn"><?= lang('form_builder_edit_form') ?></a>
-                <a href="<?= ee('CP/URL', 'addons/settings/form_builder/edit_field/' . $form['form_id']) ?>" class="btn action"><?= lang('form_builder_add_field') ?></a>
+                <div class="add-field-picker">
+                    <details>
+                        <summary class="btn action"><?= lang('form_builder_add_field') ?></summary>
+                        <div class="add-field-menu">
+                            <?php foreach ($field_type_groups as $group_key => $group): ?>
+                                <div class="add-field-menu__header"><?= htmlspecialchars(lang($group['label_key']), ENT_QUOTES) ?></div>
+                                <?php foreach ($group['types'] as $type_key): ?>
+                                    <a class="add-field-menu__item"
+                                       href="<?= ee('CP/URL', 'addons/settings/form_builder/edit_field/' . $form['form_id'] . '/0/' . $type_key)->compile() ?>">
+                                        <?= htmlspecialchars($field_types[$type_key] ?? $type_key, ENT_QUOTES) ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    </details>
+                </div>
             </div>
         </div>
     </div>
@@ -35,7 +89,12 @@
                                 <td class="drag-handle" style="cursor: move;">&#9776;</td>
                                 <td><?= htmlspecialchars($field['field_label']) ?></td>
                                 <td><code><?= htmlspecialchars($field['field_name']) ?></code></td>
-                                <td><?= $field_types[$field['field_type']] ?? $field['field_type'] ?></td>
+                                <td>
+                                    <?= $field_types[$field['field_type']] ?? $field['field_type'] ?>
+                                    <?php if (!empty($field['is_misconfigured'])): ?>
+                                        <span class="st-pending" title="<?= lang('form_builder_mailchimp_field_misconfigured') ?>" style="margin-left:5px;cursor:help;">&#9888; Config needed</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td>
                                     <?php if ($field['is_required'] === 'y'): ?>
                                         <span class="yes"><?= lang('yes') ?></span>

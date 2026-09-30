@@ -114,6 +114,14 @@
 					height: 480px;
 				}
 			}
+
+			a {
+				color: $navy;
+				&:hover {
+					background-color: inherit;
+					color: rgba($navy, 0.75);
+				}
+			}
 		}
 
 		.calendar-wrap {

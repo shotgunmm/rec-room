@@ -138,7 +138,7 @@
 						<h2 class="text-uppercase mb-0">{content:text}</h2>
 						{/if}
 						{if content:button_text && content:button_link}
-						<a class="cta" href="{content:button_link}">{content:button_text}</a>
+						<a class="cta" href="{content:button_link}"{if content:open_link_in_new_tab} target="_blank"{/if}>{content:button_text}</a>
 						{/if}
 					</div>
 				</div>
@@ -253,7 +253,9 @@
 	<div class="container gx-0 d-flex justify-content-center" style="max-width: 1520px">
 		<div class="circle">
 			<div class="border-wrap d-flex align-items-center justify-content-center justify-content-md-end">
-				<div class="star"><img src="/images/logo-stars.svg" alt="" width="110" height="198" /></div>
+				<div class="star">
+          <img src="/images/logo-stars.svg" alt="" width="110" height="198" />
+        </div>
 				<div class="text">
 					{content}
 					{if content:header}
@@ -261,14 +263,14 @@
 						<h2{if content:header_color} class="header-{content:header_color}"{/if}>{content:header}</h2>
 					</div>
 					{/if}
-					{/content}
+          {content:description}
+          {if content:show_events_in_circle}
 					<ul>
 					{exp:event_calendar:events_list recurring="yes" single="no" limit="10" status="open" var_prefix="ev"}
-					<li><strong>{ev:day_of_week}: {ev:title}</strong>{if ev:description} - {ev:description}{/if}</li>
+					<li><strong>{ev:day_of_week}: {ev:title}</strong>{if ev:short_description} - {ev:short_description}{/if}</li>
 					{/exp:event_calendar:events_list}
 					</ul>
-          {content}
-          {content:description}
+          {/if}
           {/content}
 				</div>
 			</div>
@@ -277,6 +279,7 @@
       single="yes"
       recurring="no"
       status="open"
+      detail_url="{site_url}event-detail"
     }
 	</div>
 </section>
@@ -294,7 +297,7 @@
       <h2 class="text-uppercase mb-0"><strong>REC ROOM</strong> SCHEDULE</h2>
     </div>
     <div data-calendar-event-list>
-    {exp:event_calendar:events_list single="yes" recurring="no" status="open" limit="100" var_prefix="ev"}
+    {exp:event_calendar:events_list single="yes" recurring="no" status="open" limit="100" var_prefix="ev" detail_url="{site_url}event-detail"}
     <div class="event-collapse{if ev:count == 1} clicked{/if}" data-event-date="{ev:date_key}">
       <div class="event-head d-flex">
         <div class="date d-flex justify-content-center align-items-center">{ev:day_num}</div>
@@ -308,7 +311,8 @@
       </div>
       <div class="event-content"{if ev:count == 1} style="display:block"{/if}>
         <div class="text">
-          {if ev:description}<h2>About</h2><p>{ev:description}</p>{/if}
+          {if ev:short_description}<h2>About</h2>{ev:short_description}{/if}
+          <p><a class="cta" href="{site_url}event-detail/{ev:slug}">View Full Details</a></p>
         </div>
       </div>
     </div>
@@ -327,14 +331,6 @@
 {/page_content:image_page_hero}
 
 {page_content:contact_section}
-<!-- {content}
-    {content:header}
-    {content:description}
-    {content:map_embed_code}
-    Between {content:map_width:min} and {content:map_width:max} the selected value is {content:map_width:prefix} <span class="value">{content:map_width}</span> {content:map_width:suffix} 
-    Between {content:map_height:min} and {content:map_height:max} the selected value is {content:map_height:prefix} <span class="value">{content:map_height}</span> {content:map_height:suffix} 
-    {content:form:label}: {content:form:value}
-{/content} -->
 {content}
 <style>
   .map {
@@ -374,9 +370,7 @@
 </section>
 {/page_content:contact_section}
 
-
 {page_content:form}
-  {embed="forms/{content:value}"}
   {embed="forms/index" form_name="{content:value}"}
 {/page_content:form}
 

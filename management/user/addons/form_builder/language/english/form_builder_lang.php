@@ -146,4 +146,73 @@ $lang = array(
     'form_builder_no_forms'           => 'No forms have been created yet.',
     'form_builder_no_fields'          => 'No fields have been added to this form yet.',
     'form_builder_no_submissions'     => 'No submissions have been received yet.',
+
+    // Mailchimp settings page
+    'form_builder_mailchimp_settings'           => 'Mailchimp Settings',
+    'form_builder_mailchimp_api_key'            => 'Mailchimp API Key',
+    'form_builder_mailchimp_alerts_email'       => 'Alerts Email',
+    'form_builder_mailchimp_alerts_email_desc'  => 'Optional email address to receive failure alerts (in addition to the form\'s recipient email).',
+    'form_builder_mailchimp_refresh_lists'      => 'Refresh Lists',
+    'form_builder_mailchimp_refresh_lists_desc' => 'Lists do not update automatically. Click Refresh Lists after creating or renaming audiences in Mailchimp.',
+    'form_builder_mailchimp_test_connection'    => 'Test Connection',
+    'form_builder_mailchimp_settings_saved'     => 'Mailchimp settings saved successfully',
+    'form_builder_mailchimp_lists_refreshed'    => 'Mailchimp lists refreshed successfully',
+    'form_builder_mailchimp_last_refresh'       => 'Last refreshed',
+    'form_builder_mailchimp_never_refreshed'    => 'Never refreshed',
+    'form_builder_mailchimp_connection_ok'      => 'Connection to Mailchimp successful',
+    'form_builder_mailchimp_connection_fail'    => 'Could not connect to Mailchimp',
+
+    // Mailchimp field config
+    'form_builder_mailchimp_list_id'              => 'Mailchimp List',
+    'form_builder_mailchimp_email_field'          => 'Email Source Field',
+    'form_builder_mailchimp_email_field_desc'     => 'The form field containing the email address to subscribe.',
+    'form_builder_mailchimp_default_checked'      => 'Default Checked',
+    'form_builder_mailchimp_default_checked_desc' => 'Whether the checkbox is pre-checked on the front-end (best practice: no).',
+    'form_builder_mailchimp_merge_fields'         => 'Merge Field Mapping',
+    'form_builder_mailchimp_merge_fields_desc'    => 'One per line: MERGE_TAG=form_field_name. Example: FNAME=first_name',
+    'form_builder_mailchimp_tags'                 => 'Tags',
+    'form_builder_mailchimp_tags_desc'            => 'Comma-separated tags applied to subscribers. Example: newsletter-signup, footer-form',
+
+    // Per-form Mailchimp confirmation text
+    'form_builder_mailchimp_success_text'      => 'Subscription Success Text',
+    'form_builder_mailchimp_success_text_desc' => 'Text inserted where {mailchimp_status} appears in your confirmation template, when subscription succeeds. Leave blank to use the default.',
+    'form_builder_mailchimp_failure_text'      => 'Subscription Failure Text',
+    'form_builder_mailchimp_failure_text_desc' => 'Text inserted where {mailchimp_status} appears in your confirmation template, when subscription fails. Leave blank to use the default.',
+    'form_builder_mailchimp_default_success'   => 'You have been subscribed to our mailing list at your request. You can unsubscribe at any time using the link in our emails.',
+    'form_builder_mailchimp_default_failure'   => 'There was an issue subscribing you to our mailing list. We\'ll add you manually.',
+
+    // Submission viewer
+    'form_builder_mailchimp_status'                       => 'Mailchimp Status',
+    'form_builder_mailchimp_error'                        => 'Mailchimp Error',
+    'form_builder_mailchimp_why'                          => 'Why It Failed',
+    'form_builder_mailchimp_status_subscribed'            => 'Subscribed',
+    'form_builder_mailchimp_status_reactivated'           => 'Re-subscribed',
+    'form_builder_mailchimp_status_updated'               => 'Updated',
+    'form_builder_mailchimp_status_skipped_unchecked'     => 'Not requested',
+    'form_builder_mailchimp_status_skipped_misconfigured' => 'Skipped (misconfigured)',
+    'form_builder_mailchimp_status_failed'                          => 'Failed',
+    'form_builder_mailchimp_status_failed_rate_limit'               => 'Failed (rate limited)',
+    'form_builder_mailchimp_status_failed_invalid_email'            => 'Failed (invalid email)',
+    'form_builder_mailchimp_status_failed_permanently_deleted'      => 'Failed (permanently deleted)',
+
+    // Field list warning
+    'form_builder_mailchimp_field_misconfigured' => 'Mailchimp field requires configuration — not currently active on the front-end.',
+
+    // Field type picker and type-change UX (v1.2.0)
+    'form_builder_field_type_change_desc'     => 'Changing the type will reload the form. Only compatible types are available.',
+    'form_builder_field_type_locked_desc'     => 'Field type cannot be changed after creation. To use a different type, delete this field and create a new one.',
+    'form_builder_no_default'                 => '-- No default --',
+    'form_builder_default_value_choice_desc'  => 'Enter a value matching one of your Field Options to set as default. After saving, you\'ll be able to pick from a dropdown.',
+    'form_builder_save_and_continue'          => 'Save & Continue',
+
+    // Warning field settings
+    'form_builder_warning_color'      => 'Text Color',
+    'form_builder_warning_color_desc' => 'Hex color applied to the warning label text (e.g. #cc0000). Leave blank to inherit the site default.',
+
+    // Field type group labels (used by FIELD_TYPE_GROUPS constant via label_key)
+    'form_builder_group_text_like'   => 'Text Fields',
+    'form_builder_group_choice_like' => 'Choice Fields',
+    'form_builder_group_binary'      => 'File Fields',
+    'form_builder_group_mailchimp'   => 'Integrations',
+    'form_builder_group_display'     => 'Display Only',
 );

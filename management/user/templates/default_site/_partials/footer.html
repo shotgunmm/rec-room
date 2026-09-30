@@ -14,28 +14,37 @@
 									<h2>REC ROOM</h2>
 									<ul class="list-unstyled column-2">
 										{exp:structure:nav_basic show_depth="1"}
+										{if root:page_url == '/menu/'}
+										<li><a href="{menu-url}" target="_blank" class="text-uppercase">{root:title}</a></li>
+										{if:else}
 										<li><a href="{root:page_url}" class="text-uppercase">{root:title}</a></li>
+										{/if}
 										{/exp:structure:nav_basic}
+										<li><a href="/privacy-policy/" class="text-uppercase">Privacy Policy</a></li>
+										<li><a href="/accessibility-statement/" class="text-uppercase">Accessibility</a></li>
 									</ul>
 								</div>
 								<h3>
-									FUEL ESPRESSO & BAGEL CO.<br />
-									STARLAND
+									<a href="https://fuel53.com/" target="_blank" class="color-inherit">
+										FUEL ESPRESSO & BAGEL CO.
+									</a><br />
+									<a href="https://starlandsports.com/" target="_blank" class="color-inherit">
+										STARLAND
+									</a>
 								</h3>
 							</div>
 							<div class="col-md ps-lg-4 pb-5 pb-md-0 mt-4 mt-lg-0 d-flex justify-content-between bod-left">
 								<div class="copy">
-									<h2>(781) 996-3054</h2>
-									<p class="text-orange">Hours:</p>
+									<h2><a href="tel:{phone-number}" class="color-inherit">{phone-number}</a></h2>
+									<p class="text-orange">Address:</p>
 									<p>
-										Mon - Fri: 4p-12a<br />
-										Sat: 12p-12a<br />
-										Sun: 12p-8p
+										<a href="{address-gmaps-link}" target="_blank" class="color-inherit">
+											{address}
+										</a>
 									</p>
-									<p class="fst-italic">
-										Thurs - Sat:<br />
-										Bar Area 21+ after 7pm
-									</p>
+									<p class="text-orange">Hours:</p>
+									<p>{hours}</p>
+									<p class="fst-italic">{hours-notes}</p>
 								</div>
 								<div class="logo-star"><img src="/images/footer-star-logo.svg" alt="" /></div>
 							</div>
@@ -54,7 +63,7 @@
 						<a href="{social-instagram-link}" target="_blank"><i class="bi bi-instagram"></i></a>
 					</li>
 					<li class="mx-3 mb-4">
-						<a href="mailto:info@recroomhanover.com"><i class="bi bi-envelope"></i></a>
+						<a href="mailto:{contact-email}"><i class="bi bi-envelope"></i></a>
 					</li>
 				</ul>
 			</div>

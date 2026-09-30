@@ -15,7 +15,8 @@ class Event
     public int $site_id = 1;
     public string $title = '';
     public string $slug = '';
-    public string $description = '';
+    public ?string $short_description = null;
+    public ?string $event_details = null;
     public string $location = '';
     public string $url = '';
     public int $start_time = 0;
@@ -51,7 +52,8 @@ class Event
         $e->site_id        = (int) $row['site_id'];
         $e->title          = (string) $row['title'];
         $e->slug           = (string) $row['slug'];
-        $e->description    = (string) $row['description'];
+        $e->short_description = $row['short_description'] !== null ? (string) $row['short_description'] : null;
+        $e->event_details  = $row['event_details'] !== null ? (string) $row['event_details'] : null;
         $e->location       = (string) $row['location'];
         $e->url            = (string) $row['url'];
         $e->start_time     = (int) $row['start_time'];
@@ -73,7 +75,8 @@ class Event
             'site_id'        => $this->site_id,
             'title'          => $this->title,
             'slug'           => $this->slug,
-            'description'    => $this->description,
+            'short_description' => $this->short_description,
+            'event_details'  => $this->event_details,
             'location'       => $this->location,
             'url'            => $this->url,
             'start_time'     => $this->start_time,
