@@ -6,7 +6,7 @@ return array(
     'docs_url'       => '',
     'name'           => 'Form Builder',
     'description'    => 'Build and manage contact forms with multiple field types, email routing, and submission tracking',
-    'version'        => '1.2.1',
+    'version'        => '1.3.1',
     'namespace'      => 'FormBuilder',
     'settings_exist' => true,
 );

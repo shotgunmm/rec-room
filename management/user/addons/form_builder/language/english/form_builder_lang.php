@@ -118,6 +118,8 @@ $lang = array(
     'form_builder_recaptcha_enabled_desc'   => 'Turn reCAPTCHA validation on or off.',
     'form_builder_recaptcha_site_key'       => 'reCAPTCHA Site Key',
     'form_builder_recaptcha_site_secret'    => 'reCAPTCHA Site Secret',
+    'form_builder_recaptcha_score_threshold'      => 'Minimum Score',
+    'form_builder_recaptcha_score_threshold_desc' => 'reCAPTCHA v3 scores each submission from 0.0 (likely a bot) to 1.0 (likely human). Submissions scoring below this are rejected. Leave blank to use the default (0.3).',
     'form_builder_save_recaptcha_settings'  => 'Save reCAPTCHA Settings',
     'form_builder_recaptcha_settings_saved' => 'reCAPTCHA Settings Saved',
 
@@ -215,4 +217,20 @@ $lang = array(
     'form_builder_group_binary'      => 'File Fields',
     'form_builder_group_mailchimp'   => 'Integrations',
     'form_builder_group_display'     => 'Display Only',
+    'form_builder_group_composite'   => 'Repeating Sections',
+
+    // Composite (repeating) fields (v1.3.0)
+    'form_builder_max_rows'      => 'Maximum Entries',
+    'form_builder_max_rows_desc' => 'How many entries an applicant may add (1–%d). Each entry has the columns: %s.',
+
+    // Form templates (v1.3.0)
+    'form_builder_templates'             => 'Templates',
+    'form_builder_all_templates'         => 'Form Templates',
+    'form_builder_save_as_template'      => 'Save as Template',
+    'form_builder_new_from_template'     => 'New Form from Template',
+    'form_builder_template_saved'        => 'Template saved.',
+    'form_builder_template_deleted'      => 'Template deleted.',
+    'form_builder_form_created_from_template' => 'Form created from template. Review the fields below.',
+    'form_builder_no_templates'          => 'No templates yet. Open a form and choose "Save as Template".',
+    'form_builder_confirm_delete_template' => 'Delete this template? Forms already created from it are not affected.',
 );

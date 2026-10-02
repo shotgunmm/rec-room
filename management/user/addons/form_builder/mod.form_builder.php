@@ -26,6 +26,29 @@ class Form_builder
         'reactivated'
     );
 
+    const RECAPTCHA_DEFAULT_SCORE_THRESHOLD = 0.3;
+
+    /**
+     * Decrypts a value stored via ee('Encrypt')->encode(), falling back to the
+     * raw stored value if decryption fails.
+     *
+     * Settings saved by older versions of this addon (recaptcha_site_secret,
+     * smtp_password, mailchimp_api_key) were stored in plaintext; newer
+     * versions encrypt them. ee('Encrypt')->decode() reliably returns false
+     * when handed a value that was never actually encrypted (it fails
+     * OpenSSL's padding check), so this lets either format keep working
+     * without requiring anyone to re-enter settings after an addon update.
+     * Any subsequent save through the CP re-encrypts the value going forward.
+     */
+    public static function safeDecode($value)
+    {
+        if (empty($value)) {
+            return '';
+        }
+        $decoded = ee('Encrypt')->decode($value);
+        return ($decoded !== false && $decoded !== '') ? $decoded : $value;
+    }
+
     public function __construct()
     {
         $this->site_id = ee()->config->item('site_id');
@@ -57,10 +80,21 @@ class Form_builder
      *   <button type="submit">Submit</button>
      * {/exp:form_builder:form}
      */
-    public function form()
+    /**
+     * @param array $render_overrides Integration hook (e.g. HR module) — supported keys:
+     *   'form_id'           => render this form regardless of tag params
+     *   'action_url'        => POST target override (integrator's own ACT)
+     *   'extra_hidden_html' => appended to the hidden-fields block
+     *   'extra_field_vars'  => appended to {fields} after the form's own fields
+     * ACT/template calls pass nothing; behavior is unchanged without overrides.
+     */
+    public function form($render_overrides = array())
     {
         $form_name = ee()->TMPL->fetch_param('name');
         $form_id = ee()->TMPL->fetch_param('form_id');
+        if (!empty($render_overrides['form_id'])) {
+            $form_id = (int) $render_overrides['form_id'];
+        }
         $class = ee()->TMPL->fetch_param('class', '');
         $id = ee()->TMPL->fetch_param('id', '');
         $return = ee()->TMPL->fetch_param('return', '');
@@ -97,11 +131,13 @@ class Form_builder
         }
 
         $action_url = ee()->functions->fetch_site_index() . QUERY_MARKER . 'ACT=' . $this->action_id;
+        if (!empty($render_overrides['action_url'])) {
+            $action_url = $render_overrides['action_url'];
+        }
 
         // Fetch flash data before building fields so old values can repopulate inputs
         $flash_errors = ee()->session->flashdata('form_builder_errors_' . $form['form_id']);
         $flash_old    = ee()->session->flashdata('form_builder_old_'    . $form['form_id']);
-        file_put_contents('/tmp/fb_debug.txt', date('H:i:s') . ' FORM LOAD form_id=' . $form['form_id'] . ' flash_errors=' . ($flash_errors ? json_encode(array_keys($flash_errors)) : 'none') . "\n", FILE_APPEND);
 
         // Build field variables
         $field_vars = array();
@@ -128,6 +164,15 @@ class Form_builder
             );
         }
 
+        if (!empty($render_overrides['extra_field_vars'])) {
+            foreach ($render_overrides['extra_field_vars'] as $extra_var) {
+                if (isset($extra_var['field_type']) && $extra_var['field_type'] === 'file') {
+                    $has_file = true;
+                }
+                $field_vars[] = $extra_var;
+            }
+        }
+
         $has_errors = !empty($flash_errors);
         $error_list = $flash_errors ?: array();
 
@@ -142,6 +187,22 @@ class Form_builder
                 . '</div>';
         }
 
+        // Auto-injected error box — every form gets this automatically, no
+        // template markup required. The same .form-error element the
+        // client-side pre-submit validation (below) already toggles is
+        // pre-filled here when a server-side error (reCAPTCHA, rate limit,
+        // failed save, etc.) is present, so both failure paths always share
+        // one visible box with zero per-site setup.
+        // width:100% guards against sitting inside a flex/grid row (e.g. a
+        // Bootstrap .row) as a bare div with no col-* class, which would
+        // otherwise shrink it to content width instead of spanning the row.
+        // Harmless when a template wraps {error_box} itself, since 100% of
+        // an already-full-width wrapper is still full width.
+        $auto_error_text = $has_errors ? implode(' ', array_map('strval', $error_list)) : '';
+        $auto_error_html = '<div class="form-error-wrap" style="width:100%;' . ($has_errors ? '' : 'display:none;') . '">'
+            . '<div class="alert alert-danger form-error">' . htmlspecialchars($auto_error_text, ENT_QUOTES) . '</div>'
+            . '</div>';
+
         // Parse template variables
         $vars = array(
             'form_id' => $form['form_id'],
@@ -150,9 +211,24 @@ class Form_builder
             'action_url' => $action_url,
             'has_errors' => $has_errors,
             'errors_html' => $errors_html,
+            'error_box' => $auto_error_html,
             'fields' => $field_vars,
             'old' => $flash_old ?: array()
         );
+
+        // If the template explicitly placed {error_box} itself, or already
+        // has its own "form-error" element (the older, pre-{error_box}
+        // documented pattern — the client-side validation below always
+        // targets that exact class name, so any template using this addon's
+        // built-in validation already has one), don't also auto-inject one
+        // at the top of the form. Two boxes would mean the validation script
+        // (which grabs the first .form-error it finds) silently relocates
+        // messages away from wherever the template put its own box. Only
+        // auto-inject when neither is present, so error handling works with
+        // zero template setup for a form that doesn't have either yet.
+        $tagdata = ee()->TMPL->tagdata;
+        $template_placed_error_box = strpos($tagdata, '{error_box}') !== false
+            || strpos($tagdata, 'form-error') !== false;
 
         $form_attrs = array(
             'method' => 'post',
@@ -178,15 +254,22 @@ class Form_builder
         // Build hidden fields
         $hidden = '<input type="hidden" name="form_id" value="' . $form['form_id'] . '">';
         $hidden .= '<input type="hidden" name="csrf_token" value="' . CSRF_TOKEN . '">';
-        // Honeypot — visually hidden from humans, filled in by bots
-        $hidden .= '<div style="position:absolute;left:-9999px;top:-9999px;"><input type="text" name="website_url" value="" autocomplete="off" tabindex="-1" aria-hidden="true"></div>';
+        // Honeypot — visually hidden from humans, filled in by bots.
+        // inert prevents Chrome/Edge autofill from filling the field even when off-screen;
+        // the field name avoids recognisable URL keywords that trigger browser autofill.
+        $hidden .= '<div style="position:absolute;left:-9999px;top:-9999px;" inert aria-hidden="true"><input type="text" name="hp_url_field" value="" autocomplete="off" tabindex="-1"></div>';
         // Allow return override
         if ($return) {
             $hidden .= '<input type="hidden" name="return" value="' . htmlspecialchars($return, ENT_QUOTES) . '">';
         }
+        if (!empty($render_overrides['extra_hidden_html'])) {
+            $hidden .= $render_overrides['extra_hidden_html'];
+        }
+        if (!$template_placed_error_box) {
+            $hidden .= $auto_error_html;
+        }
 
         // Parse the tag content
-        $tagdata = ee()->TMPL->tagdata;
         $output = ee()->TMPL->parse_variables($tagdata, array($vars));
 
         // Load reCAPTCHA if enabled
@@ -454,11 +537,11 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
                     $confirm_label = lang('form_builder_confirm_email_label');
                     $confirm_name  = $name . '_confirm';
                     $confirm_old   = htmlspecialchars(isset($old[$field['field_name'] . '_confirm']) ? $old[$field['field_name'] . '_confirm'] : '', ENT_QUOTES);
+                    $confirm_label_text = htmlspecialchars($confirm_label, ENT_QUOTES) . ($field['is_required'] === 'y' ? ' <span class="red">*</span>' : '');
                     $html .= '<div class="' . $css_class . ' form-field">
-                    <label class="form-label" for="' . $confirm_name . '">' . htmlspecialchars($confirm_label, ENT_QUOTES) . '</label>
+                    <label class="form-label" for="' . $confirm_name . '">' . $confirm_label_text . '</label>
                     <input class="form-control" id="' . $confirm_name . '" data-label="' . htmlspecialchars($confirm_label, ENT_QUOTES) . '" type="email" name="' . $confirm_name . '" value="' . $confirm_old . '" ' . $required . $confirm_error_border . ' data-confirm-email="true" />
                     ' . $confirm_error_html . '
-                    <div class="form-text">' . htmlspecialchars($confirm_label, ENT_QUOTES) . '</div>
                 </div>';
                 }
                 return $html;
@@ -654,6 +737,12 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
                 </div>';
                 return $html;
 
+            case 'work_history':
+            case 'education':
+                // Old values arrive as the JSON we stored in flashdata (see submit()).
+                $old_rows = $raw_old !== null ? self::decodeCompositeValue($raw_old) : array();
+                return $this->renderCompositeHtml($field, $old_rows, $error_html, $css_class);
+
             case 'warning':
                 $warning_color_style = '';
                 if (!empty($field['field_config'])) {
@@ -685,6 +774,439 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
     /**
      * Parse field options (one per line, optionally value|label format)
      */
+    // -------------------------------------------------------------------------
+    // Form templates — v1.3.0
+    //
+    // A template is a JSON snapshot of a form's settings + fields. "Save as
+    // Template" snapshots a working form; "New Form from Template" replays the
+    // snapshot into a fresh form. Pure helpers here; DB work lives in the MCP.
+    // -------------------------------------------------------------------------
+
+    const TEMPLATE_DEFINITION_VERSION = 1;
+
+    /** Form columns carried into a template (identity/site columns excluded). */
+    const TEMPLATE_FORM_COLUMNS = array(
+        'form_label', 'recipient_email', 'reply_to_field', 'email_subject', 'success_redirect',
+        'send_confirmation', 'confirmation_template', 'confirmation_subject',
+        'confirmation_from_name', 'confirmation_from_email',
+    );
+
+    /** Field columns carried into a template (ids/order excluded — order = list order). */
+    const TEMPLATE_FIELD_COLUMNS = array(
+        'field_name', 'field_header', 'field_label', 'field_type', 'field_options', 'placeholder',
+        'default_value', 'is_required', 'confirm', 'validation_rules', 'css_class',
+        'file_types', 'max_file_size', 'field_config',
+    );
+
+    /**
+     * Snapshot a form row + its field rows into a template definition. Pure.
+     */
+    public static function templateDefinitionFromForm(array $form, array $fields)
+    {
+        $def_form = array();
+        foreach (self::TEMPLATE_FORM_COLUMNS as $col) {
+            $def_form[$col] = isset($form[$col]) ? $form[$col] : null;
+        }
+        $def_fields = array();
+        usort($fields, function ($a, $b) {
+            return ((int) ($a['field_order'] ?? 0)) <=> ((int) ($b['field_order'] ?? 0));
+        });
+        foreach ($fields as $f) {
+            $row = array();
+            foreach (self::TEMPLATE_FIELD_COLUMNS as $col) {
+                $row[$col] = isset($f[$col]) ? $f[$col] : null;
+            }
+            $def_fields[] = $row;
+        }
+        return array(
+            'version' => self::TEMPLATE_DEFINITION_VERSION,
+            'form'    => $def_form,
+            'fields'  => $def_fields,
+        );
+    }
+
+    /**
+     * Replay a template definition into insert-ready rows for a new form. Pure.
+     * Returns ['form' => [...], 'fields' => [[...], ...]] — the caller adds
+     * site_id / form_name / timestamps and the form_id after insert.
+     */
+    public static function rowsFromTemplateDefinition($definition, $form_label_override = null)
+    {
+        if (is_string($definition)) {
+            $definition = json_decode($definition, true);
+        }
+        if (!is_array($definition)) {
+            return array('form' => array(), 'fields' => array());
+        }
+        $form = array();
+        $src_form = isset($definition['form']) && is_array($definition['form']) ? $definition['form'] : array();
+        foreach (self::TEMPLATE_FORM_COLUMNS as $col) {
+            if (array_key_exists($col, $src_form)) {
+                $form[$col] = $src_form[$col];
+            }
+        }
+        if ($form_label_override !== null && trim((string) $form_label_override) !== '') {
+            $form['form_label'] = trim((string) $form_label_override);
+        }
+        $fields = array();
+        $seen   = array();
+        $order  = 1;
+        $src_fields = isset($definition['fields']) && is_array($definition['fields']) ? $definition['fields'] : array();
+        foreach ($src_fields as $f) {
+            if (!is_array($f) || empty($f['field_name']) || empty($f['field_type'])) {
+                continue;
+            }
+            $name = preg_replace('/[^a-z0-9_]/', '', strtolower((string) $f['field_name']));
+            if ($name === '' || isset($seen[$name])) {
+                continue; // duplicate names would break the form; keep the first
+            }
+            $seen[$name] = true;
+            $row = array();
+            foreach (self::TEMPLATE_FIELD_COLUMNS as $col) {
+                $row[$col] = array_key_exists($col, $f) ? $f[$col] : null;
+            }
+            $row['field_name']  = $name;
+            $row['is_required'] = ($row['is_required'] === 'y') ? 'y' : 'n';
+            $row['confirm']     = ($row['confirm'] === 'y') ? 'y' : 'n';
+            $row['field_order'] = $order++;
+            $fields[] = $row;
+        }
+        return array('form' => $form, 'fields' => $fields);
+    }
+
+    /**
+     * Templates every install ships with. Names are the idempotency key.
+     */
+    public static function builtinTemplates()
+    {
+        $file = array('file_types' => 'pdf,doc,docx', 'max_file_size' => 10240);
+        $t = function ($name, $label, $type, $req = 'n', $extra = array()) {
+            return array_merge(array(
+                'field_name' => $name, 'field_header' => '', 'field_label' => $label, 'field_type' => $type,
+                'field_options' => '', 'placeholder' => '', 'default_value' => '', 'is_required' => $req,
+                'confirm' => 'n', 'validation_rules' => '', 'css_class' => '', 'file_types' => '',
+                'max_file_size' => null, 'field_config' => null,
+            ), $extra);
+        };
+        return array(
+            array(
+                'name'        => 'Blank',
+                'description' => 'An empty form — add your own fields.',
+                'definition'  => array(
+                    'version' => self::TEMPLATE_DEFINITION_VERSION,
+                    'form'    => array('form_label' => 'New Form', 'send_confirmation' => 'n'),
+                    'fields'  => array(),
+                ),
+            ),
+            array(
+                'name'        => 'Standard Job Application',
+                'description' => 'Contact details, motivation questions, EEO (email-only), work history, education, cover letter + resume uploads.',
+                'definition'  => array(
+                    'version' => self::TEMPLATE_DEFINITION_VERSION,
+                    'form'    => array(
+                        'form_label'        => 'Job Application',
+                        'reply_to_field'    => 'emailaddress',
+                        'email_subject'     => 'Job Application',
+                        'send_confirmation' => 'n',
+                    ),
+                    'fields'  => array(
+                        $t('firstname',    'First Name',    'text',  'y'),
+                        $t('lastname',     'Last Name',     'text',  'y'),
+                        $t('emailaddress', 'Email Address', 'email', 'y'),
+                        $t('phonenumber',  'Phone Number',  'phone', 'y'),
+                        $t('how_learned',  'How did you learn about this opportunity?', 'textarea', 'y'),
+                        $t('why_position', 'Why do you want to work in this position?', 'textarea', 'y'),
+                        $t('work_history', 'Work History', 'work_history', 'n', array('field_config' => '{"max_rows":5}')),
+                        $t('education',    'Education',    'education',    'n', array('field_config' => '{"max_rows":4}')),
+                        $t('race',         'Race Identification', 'select', 'n', array(
+                            'field_options' => "American Indian or Alaska Native\nAsian or Pacific Islander\nBlack or African American\nWhite\nPrefer not to say",
+                            'field_config'  => '{"store":"n"}',
+                        )),
+                        $t('hispanic_origin', 'Are you of Hispanic origin?', 'select', 'n', array(
+                            'field_options' => "Yes\nNo\nPrefer not to say",
+                            'field_config'  => '{"store":"n"}',
+                        )),
+                        $t('cover_letter', 'Cover Letter (.PDF, .DOC, or .DOCX)', 'file', 'y', $file),
+                        $t('resume',       'Resume (.PDF, .DOC, or .DOCX)',       'file', 'y', $file),
+                    ),
+                ),
+            ),
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Composite (repeating) field types — v1.3.0
+    //
+    // A composite field is a fixed set of sub-columns the applicant can repeat
+    // (e.g. one row per past employer). Rows post as name[i][column], are
+    // normalised server-side, and are stored as a JSON list in the submission
+    // value so the rest of the pipeline keeps treating the value as a string.
+    // -------------------------------------------------------------------------
+
+    const COMPOSITE_TYPES = array('work_history', 'education');
+    const COMPOSITE_DEFAULT_MAX_ROWS = 5;
+    const COMPOSITE_HARD_MAX_ROWS = 20;
+
+    /**
+     * Sub-column schema for a composite type, or null if $type is not composite.
+     * 'key' is the column that decides whether a row counts as filled in.
+     */
+    public static function compositeSchema($type)
+    {
+        switch ($type) {
+            case 'work_history':
+                return array(
+                    'row_label' => 'Position',
+                    'key'       => 'employer',
+                    'columns'   => array(
+                        'employer'         => array('label' => 'Employer',              'type' => 'text',     'width' => 6),
+                        'job_title'        => array('label' => 'Job Title',             'type' => 'text',     'width' => 6),
+                        'start_date'       => array('label' => 'Start (month)',         'type' => 'month',    'width' => 3),
+                        'end_date'         => array('label' => 'End (month)',           'type' => 'month',    'width' => 3),
+                        'current'          => array('label' => 'I currently work here', 'type' => 'checkbox', 'width' => 6),
+                        'responsibilities' => array('label' => 'Responsibilities',      'type' => 'textarea', 'width' => 12),
+                    ),
+                );
+            case 'education':
+                return array(
+                    'row_label' => 'School',
+                    'key'       => 'school',
+                    'columns'   => array(
+                        'school'          => array('label' => 'School / Institution', 'type' => 'text', 'width' => 6),
+                        'degree'          => array('label' => 'Degree / Certificate', 'type' => 'text', 'width' => 6),
+                        'field_of_study'  => array('label' => 'Field of Study',       'type' => 'text', 'width' => 6),
+                        'graduation_year' => array('label' => 'Graduation Year',      'type' => 'text', 'width' => 6),
+                    ),
+                );
+        }
+        return null;
+    }
+
+    public static function isCompositeType($type)
+    {
+        return in_array($type, self::COMPOSITE_TYPES, true);
+    }
+
+    /**
+     * Max repeat rows for a field, from field_config.max_rows (clamped 1..20, default 5).
+     */
+    public static function compositeMaxRows(array $field)
+    {
+        $cfg = !empty($field['field_config']) ? (json_decode($field['field_config'], true) ?: array()) : array();
+        $max = isset($cfg['max_rows']) ? (int) $cfg['max_rows'] : self::COMPOSITE_DEFAULT_MAX_ROWS;
+        return max(1, min(self::COMPOSITE_HARD_MAX_ROWS, $max ?: self::COMPOSITE_DEFAULT_MAX_ROWS));
+    }
+
+    /**
+     * Turn raw POST rows into a clean list: only schema columns, trimmed strings,
+     * checkboxes as 'y'/'n', empty rows dropped, capped at $max_rows. Pure.
+     */
+    public static function normalizeCompositeRows($type, $raw, $max_rows = self::COMPOSITE_DEFAULT_MAX_ROWS)
+    {
+        $schema = self::compositeSchema($type);
+        if (!$schema || !is_array($raw)) {
+            return array();
+        }
+        $rows = array();
+        foreach ($raw as $raw_row) {
+            if (!is_array($raw_row)) {
+                continue;
+            }
+            $row = array();
+            $filled = false;
+            foreach ($schema['columns'] as $col => $def) {
+                $v = isset($raw_row[$col]) ? $raw_row[$col] : '';
+                if ($def['type'] === 'checkbox') {
+                    $row[$col] = ($v === 'y' || $v === '1' || $v === 'on' || $v === true) ? 'y' : 'n';
+                    continue;
+                }
+                $v = is_scalar($v) ? trim((string) $v) : '';
+                if (mb_strlen($v) > 2000) {
+                    $v = mb_substr($v, 0, 2000);
+                }
+                $row[$col] = $v;
+                if ($v !== '') {
+                    $filled = true;
+                }
+            }
+            if ($filled) {
+                $rows[] = $row;
+            }
+            if (count($rows) >= max(1, (int) $max_rows)) {
+                break;
+            }
+        }
+        return $rows;
+    }
+
+    /**
+     * Stored value (JSON string, or already an array) → list of rows.
+     */
+    public static function decodeCompositeValue($value)
+    {
+        if (is_array($value)) {
+            return array_values(array_filter($value, 'is_array'));
+        }
+        if (!is_string($value) || $value === '') {
+            return array();
+        }
+        $decoded = json_decode($value, true);
+        return is_array($decoded) ? array_values(array_filter($decoded, 'is_array')) : array();
+    }
+
+    /**
+     * Human-readable plain text for emails / CSV. One block per row.
+     */
+    public static function compositeRowsToText($type, $value)
+    {
+        $schema = self::compositeSchema($type);
+        $rows   = self::decodeCompositeValue($value);
+        if (!$schema || empty($rows)) {
+            return '';
+        }
+        $out = array();
+        foreach ($rows as $i => $row) {
+            $lines = array($schema['row_label'] . ' ' . ($i + 1));
+            foreach ($schema['columns'] as $col => $def) {
+                $v = isset($row[$col]) ? $row[$col] : '';
+                if ($def['type'] === 'checkbox') {
+                    if ($v === 'y') {
+                        $lines[] = '  ' . $def['label'] . ': Yes';
+                    }
+                    continue;
+                }
+                if ($v !== '') {
+                    $lines[] = '  ' . $def['label'] . ': ' . $v;
+                }
+            }
+            $out[] = implode("\n", $lines);
+        }
+        return implode("\n\n", $out);
+    }
+
+    /** Front-end markup for one composite field (rows + add/remove controls). */
+    private function renderCompositeHtml($field, $rows, $error_html, $css_class)
+    {
+        $type   = $field['field_type'];
+        $schema = self::compositeSchema($type);
+        $name   = htmlspecialchars($field['field_name'], ENT_QUOTES);
+        $max    = self::compositeMaxRows($field);
+        $label_text = nl2br(htmlspecialchars($field['field_label'], ENT_QUOTES))
+            . ($field['is_required'] === 'y' ? ' <span class="red">*</span>' : '');
+        $row_label = htmlspecialchars($schema['row_label'], ENT_QUOTES);
+
+        if (empty($rows)) {
+            $rows = array(array());
+        }
+
+        $render_row = function ($index, $row, $is_template) use ($schema, $name, $field, $row_label) {
+            $idx = $is_template ? '__INDEX__' : (int) $index;
+            $h = '<fieldset class="fb-composite-row border rounded p-3 mb-3" data-row-index="' . $idx . '">'
+               . '<div class="d-flex justify-content-between align-items-center mb-2">'
+               . '<legend class="fb-composite-row-title fs-6 fw-bold mb-0 w-auto">' . $row_label . ' <span class="fb-composite-row-num">' . ($is_template ? '' : ($index + 1)) . '</span></legend>'
+               . '<button type="button" class="btn btn-link btn-sm fb-composite-remove p-0">Remove</button>'
+               . '</div><div class="row g-3">';
+            foreach ($schema['columns'] as $col => $def) {
+                $input_name = $name . '[' . $idx . '][' . $col . ']';
+                $input_id   = $name . '_' . $idx . '_' . $col;
+                $val = isset($row[$col]) ? $row[$col] : '';
+                $val_attr = htmlspecialchars((string) $val, ENT_QUOTES);
+                $col_label = htmlspecialchars($def['label'], ENT_QUOTES);
+                // Only the first row's key column carries the HTML required flag.
+                $req = ($field['is_required'] === 'y' && !$is_template && $index === 0 && $col === $schema['key']) ? ' required' : '';
+                $h .= '<div class="col-md-' . (int) $def['width'] . '">';
+                if ($def['type'] === 'checkbox') {
+                    $checked = ($val === 'y') ? ' checked' : '';
+                    $h .= '<div class="form-check mt-md-4"><input class="form-check-input" type="checkbox" id="' . $input_id . '" name="' . $input_name . '" value="y"' . $checked . '>'
+                        . '<label class="form-check-label" for="' . $input_id . '">' . $col_label . '</label></div>';
+                } elseif ($def['type'] === 'textarea') {
+                    $h .= '<label class="form-label" for="' . $input_id . '">' . $col_label . '</label>'
+                        . '<textarea class="form-control" id="' . $input_id . '" name="' . $input_name . '" rows="3" data-label="' . $col_label . '">' . $val_attr . '</textarea>';
+                } else {
+                    $h .= '<label class="form-label" for="' . $input_id . '">' . $col_label . '</label>'
+                        . '<input class="form-control" type="' . ($def['type'] === 'month' ? 'month' : 'text') . '" id="' . $input_id . '" name="' . $input_name . '" value="' . $val_attr . '" data-label="' . $col_label . '"' . $req . '>';
+                }
+                $h .= '</div>';
+            }
+            return $h . '</div></fieldset>';
+        };
+
+        $html = '<div class="' . $css_class . ' form-field fb-composite" data-fb-composite="' . $name . '" data-max-rows="' . $max . '" data-label="' . htmlspecialchars($field['field_label'], ENT_QUOTES) . '"' . ($field['is_required'] === 'y' ? ' data-required="true"' : '') . '>'
+              . '<label class="form-label">' . $label_text . '</label>'
+              . '<div class="fb-composite-rows">';
+        foreach (array_values($rows) as $i => $row) {
+            $html .= $render_row($i, $row, false);
+        }
+        $html .= '</div>'
+              . '<template class="fb-composite-template">' . $render_row(0, array(), true) . '</template>'
+              . '<button type="button" class="btn btn-outline-secondary btn-sm fb-composite-add">+ Add another ' . $row_label . '</button>'
+              . $error_html
+              . '</div>';
+
+        if (!self::$composite_js_emitted) {
+            self::$composite_js_emitted = true;
+            $html .= self::compositeScript();
+        }
+        return $html;
+    }
+
+    private static $composite_js_emitted = false;
+
+    /** Vanilla JS: add/remove rows, renumber, honour max rows. Emitted once per page. */
+    public static function compositeScript()
+    {
+        return '<script>(function(){'
+            . 'function renumber(w){var rows=w.querySelectorAll(".fb-composite-row");rows.forEach(function(r,i){var n=r.querySelector(".fb-composite-row-num");if(n)n.textContent=i+1;var rm=r.querySelector(".fb-composite-remove");if(rm)rm.style.display=rows.length>1?"":"none";});'
+            . 'var add=w.querySelector(".fb-composite-add");if(add)add.style.display=rows.length>=parseInt(w.getAttribute("data-max-rows")||"5",10)?"none":"";}'
+            . 'function init(w){renumber(w);w.addEventListener("click",function(e){'
+            . 'if(e.target.closest(".fb-composite-add")){var t=w.querySelector(".fb-composite-template");var rows=w.querySelector(".fb-composite-rows");var next=rows.querySelectorAll(".fb-composite-row").length;var max=parseInt(w.getAttribute("data-max-rows")||"5",10);if(next>=max)return;'
+            . 'var html=t.innerHTML.replace(/__INDEX__/g,String(next));var d=document.createElement("div");d.innerHTML=html;rows.appendChild(d.firstElementChild);renumber(w);var f=rows.lastElementChild.querySelector("input,textarea");if(f)f.focus();}'
+            . 'else if(e.target.closest(".fb-composite-remove")){var row=e.target.closest(".fb-composite-row");if(w.querySelectorAll(".fb-composite-row").length>1){row.remove();renumber(w);}}'
+            . '});}'
+            . 'function boot(){document.querySelectorAll(".fb-composite").forEach(function(w){if(!w.__fbInit){w.__fbInit=1;init(w);}});}'
+            . 'if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",boot);}else{boot();}'
+            . '})();</script>';
+    }
+
+    /**
+     * Append integrator context entries to submission data.
+     * Existing form fields are never overwritten by context.
+     */
+    public static function mergeExtraData(array $submission_data, array $extra_data)
+    {
+        foreach ($extra_data as $extra_name => $extra_entry) {
+            if (isset($submission_data[$extra_name])) {
+                continue; // never let context overwrite a real form field
+            }
+            $submission_data[$extra_name] = array(
+                'label' => isset($extra_entry['label']) ? $extra_entry['label'] : $extra_name,
+                'value' => isset($extra_entry['value']) ? $extra_entry['value'] : '',
+                'type'  => isset($extra_entry['type']) ? $extra_entry['type'] : 'text',
+            );
+        }
+
+        return $submission_data;
+    }
+
+    /**
+     * Strip fields flagged "email only" (field_config store=n) from the data
+     * that gets persisted. The notification email uses the unfiltered data.
+     */
+    public static function filterStoredData(array $submission_data, array $fields)
+    {
+        foreach ($fields as $field) {
+            if (empty($field['field_config'])) {
+                continue;
+            }
+            $field_cfg = json_decode($field['field_config'], true) ?: array();
+            if (isset($field_cfg['store']) && $field_cfg['store'] === 'n' && isset($field['field_name'])) {
+                unset($submission_data[$field['field_name']]);
+            }
+        }
+
+        return $submission_data;
+    }
+
     public static function parseOptions($options_string)
     {
         if (empty($options_string)) {
@@ -720,7 +1242,18 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
     /**
      * Handle form submission (ACT method)
      */
-    public function submit()
+    /**
+     * @param array $overrides Integration hook (e.g. HR module) — supported keys:
+     *   'form'       => array merged over the loaded form row (recipient_email, email_subject, success_redirect, …)
+     *   'extra_data' => array of field_name => ['label','value','type'] appended to the submission
+     *                   (included in notification email and stored row)
+     *   'after_save' => callable($submission_id, $form, $stored_data) invoked once the submission
+     *                   row is saved, before emails are sent (v1.3.0 — lets an integrator link the
+     *                   submission to its own records, e.g. HR applications). Exceptions are logged,
+     *                   never surfaced to the applicant.
+     * The ACT endpoint calls this with no arguments; behavior is unchanged without overrides.
+     */
+    public function submit($overrides = array())
     {
         // EE validates CSRF for all front-end POST requests before this method runs.
         // A duplicate check here is not possible — EE removes csrf_token from $_POST
@@ -728,7 +1261,7 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
 
         // Honeypot check — bots fill in hidden fields, humans leave them blank.
         // Silently appear to succeed so bots do not retry with the field empty.
-        if (ee()->input->post('website_url') !== false && ee()->input->post('website_url') !== '') {
+        if (ee()->input->post('hp_url_field') !== false && ee()->input->post('hp_url_field') !== '') {
             $form_id_raw = (int) ee()->input->post('form_id');
             ee()->session->set_flashdata('form_builder_success_' . $form_id_raw, true);
             $referrer = ee()->input->server('HTTP_REFERER');
@@ -756,6 +1289,10 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
         if (!$form || $form['is_active'] !== 'y') {
             $this->handleError('Form not found or inactive', $form_id);
             return;
+        }
+
+        if (!empty($overrides['form']) && is_array($overrides['form'])) {
+            $form = array_merge($form, $overrides['form']);
         }
 
         // Rate limit: max 5 submissions per IP per form per 10 minutes (skipped on localhost)
@@ -788,7 +1325,7 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
             }
 
             $secret = !empty($this->settings['recaptcha_site_secret'])
-                ? ee('Encrypt')->decode($this->settings['recaptcha_site_secret'])
+                ? self::safeDecode($this->settings['recaptcha_site_secret'])
                 : '';
 
             $ch = curl_init('https://www.google.com/recaptcha/api/siteverify');
@@ -815,10 +1352,14 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
 
             $result = json_decode($response, true);
 
+            $threshold = (isset($this->settings['recaptcha_score_threshold']) && $this->settings['recaptcha_score_threshold'] !== '')
+                ? (float) $this->settings['recaptcha_score_threshold']
+                : self::RECAPTCHA_DEFAULT_SCORE_THRESHOLD;
+
             if (
                 !$result ||
                 !$result['success'] ||
-                $result['score'] < 0.3 ||
+                $result['score'] < $threshold ||
                 (isset($result['action']) && $result['action'] !== 'submit')
             ) {
                 $this->handleError('reCAPTCHA verification failed.', $form_id);
@@ -890,6 +1431,11 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
                 }
             } elseif ($field['field_type'] === 'mailchimp_subscription') {
                 $value = ee()->input->post($field_name) ? 'y' : 'n';
+            } elseif (self::isCompositeType($field['field_type'])) {
+                // Repeating rows: name[i][col] → normalised list → JSON string ('' when no rows,
+                // so the generic required check below fires naturally).
+                $rows  = self::normalizeCompositeRows($field['field_type'], ee()->input->post($field_name), self::compositeMaxRows($field));
+                $value = !empty($rows) ? json_encode($rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '';
             } else {
                 $value = ee()->input->post($field_name);
             }
@@ -933,6 +1479,12 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
 
         }
 
+        // Integrator-supplied context (e.g. HR job title / additional questions) — values
+        // are already validated by the integrator; never sourced from raw client input here.
+        if (!empty($overrides['extra_data']) && is_array($overrides['extra_data'])) {
+            $submission_data = self::mergeExtraData($submission_data, $overrides['extra_data']);
+        }
+
         // Email confirmation validation — check each confirm-pair independently
         foreach ($fields as $field) {
             if ($field['field_type'] === 'email' && $field['confirm'] === 'y') {
@@ -948,7 +1500,6 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
 
         // If errors, redirect back with flash data
         if (!empty($errors)) {
-            file_put_contents('/tmp/fb_debug.txt', date('H:i:s') . ' ERRORS SET form_id=' . $form_id . ' keys=' . implode(',', array_keys($errors)) . "\n", FILE_APPEND);
             ee()->session->set_flashdata('form_builder_errors_' . $form_id, $errors);
             $old_data = $_POST;
             unset($old_data['csrf_token'], $old_data['form_id'], $old_data['return']);
@@ -956,6 +1507,10 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
             foreach ($fields as $_f) {
                 if ($_f['field_type'] === 'file') {
                     unset($old_data[$_f['field_name']]);
+                } elseif (self::isCompositeType($_f['field_type']) && isset($old_data[$_f['field_name']])) {
+                    // Keep nested rows intact (as JSON) so the re-render can repopulate them.
+                    $_rows = self::normalizeCompositeRows($_f['field_type'], $old_data[$_f['field_name']], self::compositeMaxRows($_f));
+                    $old_data[$_f['field_name']] = !empty($_rows) ? json_encode($_rows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : '';
                 } elseif (isset($old_data[$_f['field_name']]) && is_array($old_data[$_f['field_name']])) {
                     $old_data[$_f['field_name']] = implode(',', $old_data[$_f['field_name']]);
                 }
@@ -981,11 +1536,14 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
 
         }
 
-        // Save submission
+        // Save submission — fields flagged "email only" (field_config store=n) are kept in the
+        // notification email but excluded from the stored row (e.g. EEO/demographic PII).
+        $stored_data = self::filterStoredData($submission_data, $fields);
+
         $submission = array(
             'form_id' => $form_id,
             'site_id' => $this->site_id,
-            'submission_data' => json_encode($submission_data),
+            'submission_data' => json_encode($stored_data),
             'ip_address' => ee()->input->ip_address(),
             'user_agent' => ee()->input->user_agent(),
             'status' => 'new',
@@ -1003,6 +1561,14 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
             $submission_id = 0;
         }
 
+        // Announce a successfully saved submission. A no-op unless some other
+        // add-on has registered an extension for this hook (e.g. bsb_crm, to
+        // mirror the submission into its CRM inbox); Form Builder itself has
+        // no opinion on who, if anyone, is listening.
+        if ($submission_id) {
+            ee()->extensions->call('form_builder_submission_saved', $submission_id);
+        }
+
         if (!$submission_id) {
             log_message('error', 'Form Builder: failed to save submission for form ' . $form_id);
             $this->handleError('Your submission was unsuccessful. Please try again.', $form_id);
@@ -1011,6 +1577,15 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
 
         // Increment rate limit counter only on a successful save
         ee()->cache->save($rate_key, $attempts + 1, 600, Cache::LOCAL_SCOPE);
+
+        // Integrator hook — the row exists now, so callers can reference submission_id
+        if (!empty($overrides['after_save']) && is_callable($overrides['after_save'])) {
+            try {
+                call_user_func($overrides['after_save'], (int) $submission_id, $form, $stored_data);
+            } catch (\Throwable $e) {
+                log_message('error', 'Form Builder: after_save hook failed for submission ' . $submission_id . ': ' . $e->getMessage());
+            }
+        }
 
         // Mailchimp subscription processing
         $mailchimp_result = $this->processMailchimpSubscription($form, $fields, $submission_id, $submission_data);
@@ -1225,6 +1800,9 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
                     $display = 'No';
                 }
                 $body .= strtoupper($field_data['label']) . ":\n" . $display . "\n\n";
+            } elseif (self::isCompositeType($field_data['type'])) {
+                $text = self::compositeRowsToText($field_data['type'], $field_data['value']);
+                $body .= strtoupper($field_data['label']) . ":\n" . ($text !== '' ? $text : '(none)') . "\n\n";
             } else {
                 $body .= strtoupper($field_data['label']) . ":\n" . $field_data['value'] . "\n\n";
             }
@@ -1285,7 +1863,9 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
         $replace = [];
         foreach ($submission_data as $field_name => $field_data) {
             $search[]  = '{' . $field_name . '}';
-            $replace[] = (string) $field_data['value'];
+            $replace[] = self::isCompositeType($field_data['type'])
+                ? self::compositeRowsToText($field_data['type'], $field_data['value'])
+                : (string) $field_data['value'];
         }
         $body = str_replace($search, $replace, $body);
 
@@ -1342,7 +1922,7 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
                 'smtp_port' => $this->settings['smtp_port'] ?? 587,
                 'smtp_user' => $this->settings['smtp_username'] ?? '',
                 'smtp_pass' => !empty($this->settings['smtp_password'])
-                    ? ee('Encrypt')->decode($this->settings['smtp_password'])
+                    ? self::safeDecode($this->settings['smtp_password'])
                     : '',
                 'mailtype' => 'text',
                 'charset' => 'utf-8'
@@ -1376,7 +1956,9 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
         $result = ee()->email->send();
 
         if (!$result) {
-            log_message('error', 'Form Builder: email send failed. To: ' . $to . ' | Subject: ' . $subject);
+            // TEMPORARY diagnostic — remove once root-caused.
+            log_message('error', 'Form Builder: email send failed. To: ' . $to . ' | Subject: ' . $subject
+                . ' | Debug: ' . ee()->email->print_debugger());
         }
 
         ee()->email->clear();
@@ -1532,7 +2114,7 @@ input[type="file"].form-control{line-height:38px;padding-top:0;padding-bottom:0}
         $result = array('status' => 'failed', 'error_detail' => '', 'http_status' => 0);
 
         $api_key = !empty($this->settings['mailchimp_api_key'])
-            ? trim((string) ee('Encrypt')->decode($this->settings['mailchimp_api_key']))
+            ? trim((string) self::safeDecode($this->settings['mailchimp_api_key']))
             : '';
         if ($api_key === '') {
             $result['error_detail'] = 'API key not configured';

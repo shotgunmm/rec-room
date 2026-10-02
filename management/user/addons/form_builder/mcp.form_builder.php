@@ -23,6 +23,8 @@ class Form_builder_mcp
         'radio'                  => 'Radio Buttons',
         'checkbox'               => 'Checkbox',
         'file'                   => 'File Upload',
+        'work_history'           => 'Work History (repeating)',
+        'education'              => 'Education (repeating)',
         'mailchimp_subscription' => 'Mailchimp Subscription',
         'warning'                => 'Warning Text',
     );
@@ -39,6 +41,10 @@ class Form_builder_mcp
         'binary' => array(
             'label_key' => 'form_builder_group_binary',
             'types'     => array('file'),
+        ),
+        'composite' => array(
+            'label_key' => 'form_builder_group_composite',
+            'types'     => array('work_history', 'education'),
         ),
         'mailchimp' => array(
             'label_key' => 'form_builder_group_mailchimp',
@@ -95,6 +101,7 @@ class Form_builder_mcp
         $forms_list = $forms_header->addBasicList();
         $forms_list->addItem(lang('form_builder_all_forms'), ee('CP/URL', 'addons/settings/form_builder'));
         $forms_list->addItem(lang('form_builder_create_form'), ee('CP/URL', 'addons/settings/form_builder/edit_form'));
+        $forms_list->addItem(lang('form_builder_all_templates'), ee('CP/URL', 'addons/settings/form_builder/templates'));
 
         // Submissions section
         $submissions_header = $sidebar->addHeader(lang('form_builder_submissions'));
@@ -497,6 +504,195 @@ class Form_builder_mcp
         );
     }
 
+    // -------------------------------------------------------------------------
+    // FORM TEMPLATES (v1.3.0)
+    // -------------------------------------------------------------------------
+
+    public function templates()
+    {
+        $templates = ee()->db->where('site_id', $this->site_id)
+            ->order_by('is_builtin', 'desc')
+            ->order_by('name', 'asc')
+            ->get('form_builder_templates')
+            ->result_array();
+
+        foreach ($templates as &$tpl) {
+            $def = json_decode($tpl['definition'], true);
+            $tpl['field_count'] = (is_array($def) && isset($def['fields']) && is_array($def['fields'])) ? count($def['fields']) : 0;
+        }
+        unset($tpl);
+
+        return array(
+            'heading'    => lang('form_builder_all_templates'),
+            'breadcrumb' => array(
+                $this->base_url->compile() => lang('form_builder_module_name'),
+            ),
+            'body' => ee('View')->make('form_builder:templates_list')->render(array(
+                'templates' => $templates,
+                'base_url'  => $this->base_url,
+            )),
+        );
+    }
+
+    /**
+     * POST: snapshot a form (settings + fields) into a new template.
+     */
+    public function save_as_template($form_id = 0)
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ee()->functions->redirect($this->base_url);
+        }
+        $this->requireCsrf();
+
+        $form = ee()->db->where('form_id', (int) $form_id)
+            ->where('site_id', $this->site_id)
+            ->get('form_builder_forms')
+            ->row_array();
+        if (!$form) {
+            ee()->functions->redirect($this->base_url);
+        }
+        $fields = ee()->db->where('form_id', (int) $form_id)
+            ->order_by('field_order', 'asc')
+            ->get('form_builder_fields')
+            ->result_array();
+
+        $name = trim((string) ee()->input->post('template_name'));
+        if ($name === '') {
+            $name = $form['form_label'] . ' (template)';
+        }
+        $name = mb_substr($name, 0, 150);
+
+        // Unique name per site — suffix rather than silently overwrite
+        $base = $name;
+        $n = 2;
+        while (ee()->db->where('site_id', $this->site_id)->where('name', $name)->count_all_results('form_builder_templates') > 0) {
+            $name = mb_substr($base, 0, 140) . ' ' . $n++;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        ee()->db->insert('form_builder_templates', array(
+            'site_id'     => $this->site_id,
+            'name'        => $name,
+            'description' => mb_substr(trim((string) ee()->input->post('template_description')), 0, 500) ?: ('Saved from "' . $form['form_label'] . '" on ' . date('Y-m-d')),
+            'definition'  => json_encode(Form_builder::templateDefinitionFromForm($form, $fields), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'is_builtin'  => 'n',
+            'created_at'  => $now,
+            'updated_at'  => $now,
+        ));
+
+        ee('CP/Alert')->makeInline('shared-form')
+            ->asSuccess()
+            ->withTitle(lang('form_builder_template_saved') . ' "' . $name . '"')
+            ->defer();
+        ee()->functions->redirect(ee('CP/URL', 'addons/settings/form_builder/templates'));
+    }
+
+    /**
+     * GET: name the new form. POST: create form + fields from the template, then
+     * land on the field list so the editor can adjust.
+     */
+    public function new_from_template($template_id = 0)
+    {
+        $template = ee()->db->where('template_id', (int) $template_id)
+            ->where('site_id', $this->site_id)
+            ->get('form_builder_templates')
+            ->row_array();
+        if (!$template) {
+            ee()->functions->redirect(ee('CP/URL', 'addons/settings/form_builder/templates'));
+        }
+
+        $rows = Form_builder::rowsFromTemplateDefinition($template['definition']);
+        $suggested_label = isset($rows['form']['form_label']) && $rows['form']['form_label'] !== '' ? $rows['form']['form_label'] : $template['name'];
+        $errors = array();
+        $form_name  = '';
+        $form_label = $suggested_label;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->requireCsrf();
+            $form_name  = preg_replace('/[^a-z0-9_-]/', '', strtolower((string) ee()->input->post('form_name')));
+            $form_label = trim((string) ee()->input->post('form_label'));
+
+            if ($form_name === '') {
+                $errors[] = 'Form name is required (lowercase letters, numbers, hyphens, underscores).';
+            } elseif (ee()->db->where('site_id', $this->site_id)->where('form_name', $form_name)->count_all_results('form_builder_forms') > 0) {
+                $errors[] = 'A form with that name already exists.';
+            }
+            if ($form_label === '') {
+                $errors[] = 'Form label is required.';
+            }
+
+            if (empty($errors)) {
+                $rows = Form_builder::rowsFromTemplateDefinition($template['definition'], $form_label);
+                $now  = date('Y-m-d H:i:s');
+                $form_data = array_merge(array(
+                    'send_confirmation' => 'n',
+                    'is_active'         => 'y',
+                ), $rows['form'], array(
+                    'site_id'    => $this->site_id,
+                    'form_name'  => $form_name,
+                    'form_label' => $form_label,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ));
+                ee()->db->insert('form_builder_forms', $form_data);
+                $new_form_id = (int) ee()->db->insert_id();
+
+                foreach ($rows['fields'] as $field_row) {
+                    $field_row['form_id'] = $new_form_id;
+                    ee()->db->insert('form_builder_fields', $field_row);
+                }
+
+                ee('CP/Alert')->makeInline('shared-form')
+                    ->asSuccess()
+                    ->withTitle(lang('form_builder_form_created_from_template'))
+                    ->defer();
+                ee()->functions->redirect(ee('CP/URL', 'addons/settings/form_builder/edit_fields/' . $new_form_id));
+            }
+        }
+
+        return array(
+            'heading'    => lang('form_builder_new_from_template') . ': ' . $template['name'],
+            'breadcrumb' => array(
+                $this->base_url->compile() => lang('form_builder_module_name'),
+                ee('CP/URL', 'addons/settings/form_builder/templates')->compile() => lang('form_builder_all_templates'),
+            ),
+            'body' => ee('View')->make('form_builder:template_new_form')->render(array(
+                'template'    => $template,
+                'field_rows'  => $rows['fields'],
+                'form_name'   => $form_name,
+                'form_label'  => $form_label,
+                'errors'      => $errors,
+                'save_url'    => ee('CP/URL', 'addons/settings/form_builder/new_from_template/' . (int) $template_id),
+                'back_url'    => ee('CP/URL', 'addons/settings/form_builder/templates'),
+            )),
+        );
+    }
+
+    public function delete_template($template_id = 0)
+    {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            ee()->functions->redirect(ee('CP/URL', 'addons/settings/form_builder/templates'));
+        }
+        $this->requireCsrf();
+        ee()->db->where('template_id', (int) $template_id)
+            ->where('site_id', $this->site_id)
+            ->delete('form_builder_templates');
+        ee('CP/Alert')->makeInline('shared-form')
+            ->asSuccess()
+            ->withTitle(lang('form_builder_template_deleted'))
+            ->defer();
+        ee()->functions->redirect(ee('CP/URL', 'addons/settings/form_builder/templates'));
+    }
+
+    /** Reject a POST whose csrf_token doesn't match the session (CP write paths). */
+    private function requireCsrf()
+    {
+        $token = (string) ee()->input->post('csrf_token');
+        if ($token === '' || !defined('CSRF_TOKEN') || !hash_equals((string) CSRF_TOKEN, $token)) {
+            show_error('Invalid request token. Please go back and try again.', 403);
+        }
+    }
+
     public function delete_form($form_id = 0)
     {
         if ($form_id > 0) {
@@ -802,6 +998,12 @@ class Form_builder_mcp
                                 goto field_render;
                             }
                         }
+                    } elseif (Form_builder::isCompositeType($data['field_type'])) {
+                        $max_rows = (int) ee()->input->post('max_rows');
+                        if ($max_rows < 1 || $max_rows > Form_builder::COMPOSITE_HARD_MAX_ROWS) {
+                            $max_rows = Form_builder::COMPOSITE_DEFAULT_MAX_ROWS;
+                        }
+                        $data['field_config'] = json_encode(array('max_rows' => $max_rows));
                     } elseif ($data['field_type'] === 'warning') {
                         $warning_color = trim((string)(ee()->input->post('warning_color') ?: ''));
                         if ($warning_color && !preg_match('/^#[0-9a-fA-F]{3,6}$/', $warning_color)) {
@@ -832,6 +1034,22 @@ class Form_builder_mcp
                     if (in_array($submitted_group, array('mailchimp', 'display'), true)) {
                         $data['is_required'] = 'n';
                     }
+
+                    // "Email only — don't store" flag lives in field_config alongside any
+                    // type-specific config already set above
+                    $no_store = (ee()->input->post('no_store') === 'y')
+                        && !in_array($submitted_group, array('mailchimp', 'display'), true);
+                    $generic_cfg = !empty($data['field_config'])
+                        ? (json_decode($data['field_config'], true) ?: array())
+                        : array();
+                    if ($no_store) {
+                        $generic_cfg['store'] = 'n';
+                    } else {
+                        unset($generic_cfg['store']);
+                    }
+                    $data['field_config'] = !empty($generic_cfg)
+                        ? json_encode($generic_cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                        : null;
 
                     $save_action = ee()->input->post('submit');
 
@@ -1040,6 +1258,20 @@ class Form_builder_mcp
                 'title'  => lang('form_builder_is_required'),
                 'fields' => array('is_required' => array('type' => 'yes_no', 'value' => $field['is_required'])),
             );
+
+            // Email only — don't store: resolve current value from field_config
+            $no_store_value = 'n';
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                $no_store_value = (ee()->input->post('no_store') === 'y') ? 'y' : 'n';
+            } elseif (!empty($field['field_config'])) {
+                $ns_cfg = json_decode($field['field_config'], true) ?: array();
+                $no_store_value = (isset($ns_cfg['store']) && $ns_cfg['store'] === 'n') ? 'y' : 'n';
+            }
+            $top_section[] = array(
+                'title'  => 'Email Only — Don\'t Store',
+                'desc'   => 'Include this field in the notification email but exclude it from stored submissions. Use for sensitive data (e.g. EEO/demographic questions) that shouldn\'t be retained in the database.',
+                'fields' => array('no_store' => array('type' => 'yes_no', 'value' => $no_store_value)),
+            );
         }
 
         // Confirm Email toggle: email type only
@@ -1136,6 +1368,24 @@ class Form_builder_mcp
             'title'  => lang('form_builder_css_class'),
             'fields' => array('css_class' => array('type' => 'text', 'value' => $field['css_class'])),
         );
+        if ($current_group === 'composite') {
+            $max_rows_value = Form_builder::COMPOSITE_DEFAULT_MAX_ROWS;
+            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+                $max_rows_value = (int) ee()->input->post('max_rows') ?: $max_rows_value;
+            } elseif (!empty($field['field_config'])) {
+                $max_rows_value = Form_builder::compositeMaxRows($field);
+            }
+            $schema = Form_builder::compositeSchema($current_type);
+            $cols   = $schema ? implode(', ', array_map(function ($c) { return $c['label']; }, $schema['columns'])) : '';
+            $field_settings[] = array(
+                'title'  => lang('form_builder_max_rows'),
+                'desc'   => sprintf(lang('form_builder_max_rows_desc'), Form_builder::COMPOSITE_HARD_MAX_ROWS, $cols),
+                'fields' => array('max_rows' => array(
+                    'type'    => 'html',
+                    'content' => '<input type="number" name="max_rows" min="1" max="' . Form_builder::COMPOSITE_HARD_MAX_ROWS . '" value="' . (int) $max_rows_value . '" style="max-width:120px;">',
+                )),
+            );
+        }
 
         if ($current_type === 'warning') {
             $color_val = htmlspecialchars($field['warning_color'] ?? '', ENT_QUOTES);
@@ -1801,9 +2051,10 @@ class Form_builder_mcp
         // Handle form submission
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-            $submitted_enabled = ee()->input->post('recaptcha_enabled') === 'y' ? 'y' : 'n';
-            $submitted_key     = trim((string) ee()->input->post('recaptcha_site_key'));
-            $submitted_secret  = trim((string) ee()->input->post('recaptcha_site_secret'));
+            $submitted_enabled   = ee()->input->post('recaptcha_enabled') === 'y' ? 'y' : 'n';
+            $submitted_key       = trim((string) ee()->input->post('recaptcha_site_key'));
+            $submitted_secret    = trim((string) ee()->input->post('recaptcha_site_secret'));
+            $submitted_threshold = trim((string) ee()->input->post('recaptcha_score_threshold'));
 
             // Check whether a secret is already stored so we know if the field is truly required
             $existing_secret = ee()->db->select('setting_value')
@@ -1829,9 +2080,18 @@ class Form_builder_mcp
                 }
             }
 
+            if ($submitted_threshold !== '' && (!is_numeric($submitted_threshold) || $submitted_threshold < 0 || $submitted_threshold > 1)) {
+                ee('CP/Alert')->makeInline('shared-form')
+                    ->asIssue()
+                    ->withTitle(lang('form_builder_recaptcha_score_threshold') . ' must be a number between 0 and 1.')
+                    ->now();
+                goto recaptcha_render;
+            }
+
             $settings = array(
-                'recaptcha_enabled'  => $submitted_enabled,
-                'recaptcha_site_key' => $submitted_key,
+                'recaptcha_enabled'            => $submitted_enabled,
+                'recaptcha_site_key'           => $submitted_key,
+                'recaptcha_score_threshold'    => $submitted_threshold,
             );
 
             // Only update the secret if a new one was submitted; otherwise preserve the existing stored value
@@ -1875,15 +2135,16 @@ class Form_builder_mcp
         }
 
         $defaults = array(
-            'recaptcha_enabled'     => 'n',
-            'recaptcha_site_key'    => '',
-            'recaptcha_site_secret' => ''
+            'recaptcha_enabled'          => 'n',
+            'recaptcha_site_key'         => '',
+            'recaptcha_site_secret'      => '',
+            'recaptcha_score_threshold'  => ''
         );
 
         $settings = array_merge($defaults, $settings);
 
         $secret_is_saved = !empty($settings['recaptcha_site_secret']);
-        $decrypted_secret = $secret_is_saved ? (string) ee('Encrypt')->decode($settings['recaptcha_site_secret']) : '';
+        $decrypted_secret = $secret_is_saved ? (string) Form_builder::safeDecode($settings['recaptcha_site_secret']) : '';
         $settings['recaptcha_site_secret'] = '';
 
         $vars = array();
@@ -1925,6 +2186,19 @@ class Form_builder_mcp
                             'placeholder' => $secret_is_saved ? '(saved — leave blank to keep current)' : '',
                             'required'    => !$secret_is_saved,
                             'attrs'       => 'id="recaptcha_site_secret_input"'
+                        )
+                    )
+                ),
+
+                array(
+                    'title' => lang('form_builder_recaptcha_score_threshold'),
+                    'desc' => lang('form_builder_recaptcha_score_threshold_desc'),
+                    'fields' => array(
+                        'recaptcha_score_threshold' => array(
+                            'type'        => 'text',
+                            'value'       => $settings['recaptcha_score_threshold'],
+                            'placeholder' => (string) Form_builder::RECAPTCHA_DEFAULT_SCORE_THRESHOLD,
+                            'required'    => false
                         )
                     )
                 )
@@ -2006,7 +2280,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 ->get('form_builder_settings')
                 ->row('setting_value');
             $existing_decoded = !empty($existing_encoded)
-                ? trim((string) ee('Encrypt')->decode($existing_encoded))
+                ? trim((string) Form_builder::safeDecode($existing_encoded))
                 : '';
 
             $keys_to_delete = array('mailchimp_alerts_email');
@@ -2160,7 +2434,7 @@ document.addEventListener("DOMContentLoaded", function () {
             ->get('form_builder_settings')
             ->row('setting_value');
         $api_key = !empty($api_key_encoded)
-            ? trim((string) ee('Encrypt')->decode($api_key_encoded))
+            ? trim((string) Form_builder::safeDecode($api_key_encoded))
             : '';
 
         if ($api_key === '') {
@@ -2226,7 +2500,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 ->where('setting_key', 'mailchimp_api_key')
                 ->get('form_builder_settings')
                 ->row('setting_value');
-            $api_key_post = !empty($encoded) ? trim((string) ee('Encrypt')->decode($encoded)) : '';
+            $api_key_post = !empty($encoded) ? trim((string) Form_builder::safeDecode($encoded)) : '';
         }
 
         $result = $this->runMailchimpConnectionTest($api_key_post);
@@ -2336,7 +2610,7 @@ document.addEventListener("DOMContentLoaded", function () {
             ->where('setting_key', 'mailchimp_api_key')
             ->get('form_builder_settings')
             ->row('setting_value');
-        $api_key = !empty($api_key_encoded) ? trim((string) ee('Encrypt')->decode($api_key_encoded)) : '';
+        $api_key = !empty($api_key_encoded) ? trim((string) Form_builder::safeDecode($api_key_encoded)) : '';
 
         if ($api_key === '') {
             echo json_encode(array('ok' => false, 'error' => 'API key not configured.'), JSON_HEX_TAG);
@@ -2409,7 +2683,7 @@ document.addEventListener("DOMContentLoaded", function () {
             ->where('setting_key', 'mailchimp_api_key')
             ->get('form_builder_settings')
             ->row('setting_value');
-        $api_key = !empty($api_key_encoded) ? trim((string) ee('Encrypt')->decode($api_key_encoded)) : '';
+        $api_key = !empty($api_key_encoded) ? trim((string) Form_builder::safeDecode($api_key_encoded)) : '';
 
         if ($api_key === '') {
             echo json_encode(array('ok' => false, 'error' => 'API key not configured.'), JSON_HEX_TAG);
@@ -2529,7 +2803,7 @@ btn.addEventListener("click",function(){
             ->get('form_builder_settings')
             ->row('setting_value');
         $api_key = !empty($api_key_encoded)
-            ? trim((string) ee('Encrypt')->decode($api_key_encoded))
+            ? trim((string) Form_builder::safeDecode($api_key_encoded))
             : '';
 
         if ($api_key === '') {
@@ -3106,7 +3380,12 @@ if(listSel){
                 }
                 $row = [$sub['submitted_at']];
                 foreach ($columns as $col) {
-                    $row[] = isset($data[$col]['value']) ? $data[$col]['value'] : '';
+                    $cell_type = isset($data[$col]['type']) ? $data[$col]['type'] : '';
+                    $cell_val  = isset($data[$col]['value']) ? $data[$col]['value'] : '';
+                    if (Form_builder::isCompositeType($cell_type)) {
+                        $cell_val = Form_builder::compositeRowsToText($cell_type, $cell_val);
+                    }
+                    $row[] = $cell_val;
                 }
                 if ($has_mailchimp_field) {
                     $mc_status = $sub['mailchimp_status'] ?? 'none';

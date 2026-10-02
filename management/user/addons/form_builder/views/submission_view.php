@@ -52,6 +52,32 @@
                                             <?php endif; ?>
                                         <?php elseif ($field['field_type'] === 'email' && !empty($value)): ?>
                                             <a href="mailto:<?= htmlspecialchars((string)$value) ?>"><?= htmlspecialchars((string)$value) ?></a>
+                                        <?php elseif (Form_builder::isCompositeType($field['field_type'])): ?>
+                                            <?php
+                                            $comp_schema = Form_builder::compositeSchema($field['field_type']);
+                                            $comp_rows   = Form_builder::decodeCompositeValue($value);
+                                            ?>
+                                            <?php if (empty($comp_rows)): ?>
+                                                <em style="color:#888;">(none)</em>
+                                            <?php else: ?>
+                                                <table class="table--loose" style="margin:0;">
+                                                    <thead><tr>
+                                                        <?php foreach ($comp_schema['columns'] as $comp_col => $comp_def): ?>
+                                                            <th><?= htmlspecialchars($comp_def['label']) ?></th>
+                                                        <?php endforeach; ?>
+                                                    </tr></thead>
+                                                    <tbody>
+                                                    <?php foreach ($comp_rows as $comp_row): ?>
+                                                        <tr>
+                                                        <?php foreach ($comp_schema['columns'] as $comp_col => $comp_def): ?>
+                                                            <?php $cv = isset($comp_row[$comp_col]) ? (string) $comp_row[$comp_col] : ''; ?>
+                                                            <td style="white-space:pre-wrap;"><?= $comp_def['type'] === 'checkbox' ? ($cv === 'y' ? 'Yes' : '') : htmlspecialchars($cv) ?></td>
+                                                        <?php endforeach; ?>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            <?php endif; ?>
                                         <?php elseif ($field['field_type'] === 'textarea'): ?>
                                             <pre style="white-space: pre-wrap; margin: 0;"><?= htmlspecialchars((string)$value) ?></pre>
                                         <?php elseif ($field['field_type'] === 'mailchimp_subscription'): ?>

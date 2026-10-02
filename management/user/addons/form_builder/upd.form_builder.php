@@ -6,7 +6,7 @@ if (!defined('BASEPATH')) {
 
 class Form_builder_upd
 {
-    public $version = '1.2.1';
+    public $version = '1.3.1';
 
     public function __construct()
     {
@@ -299,6 +299,9 @@ class Form_builder_upd
         ee()->dbforge->add_key('setting_key');
         ee()->dbforge->create_table('form_builder_settings');
 
+        $this->createTemplatesTable();
+        $this->insertBuiltinTemplates();
+
         // Create mailchimp lists cache table
         ee()->dbforge->add_field(array(
             'list_id' => array(
@@ -392,6 +395,7 @@ class Form_builder_upd
 
     public function uninstall()
     {
+        ee()->dbforge->drop_table('form_builder_templates', true);
         // Remove module
         ee()->db->where('module_name', 'Form_builder')->delete('modules');
 
@@ -412,191 +416,252 @@ class Form_builder_upd
 
     public function update($current = '')
     {
-        if (version_compare($current, $this->version, '=')) {
-            return false;
+        // Every check below is idempotent (SHOW COLUMNS / table_exists guards),
+        // so they run unconditionally on every update rather than being gated
+        // by version_compare($current, ...). A site's recorded module_version
+        // is not a reliable proxy for its actual schema — we've seen a site
+        // recorded at 1.1.0 that was still missing columns a pre-1.0.1
+        // migration should have already added. Running everything every time
+        // means any historically-missed migration self-heals on the next
+        // update, regardless of what version a site happens to be stamped at.
+        //
+        // Table/column existence checks use ee()->db->dbprefix (the site's
+        // actual configured prefix) rather than a hardcoded 'exp_' string,
+        // since a hardcoded prefix silently reads zero rows (and so never
+        // fixes anything) on any site using a non-default table prefix.
+        $p = ee()->db->dbprefix;
+
+        // Originally introduced pre-1.0.0
+        $idx = ee()->db->query("SHOW INDEX FROM {$p}form_builder_submissions WHERE Key_name = 'idx_submitted_at'")->num_rows();
+        if ($idx === 0) {
+            ee()->db->query("ALTER TABLE {$p}form_builder_submissions ADD INDEX idx_submitted_at (submitted_at)");
         }
 
-        // Add index for submitted_at if it doesn't exist
-        if (version_compare($current, '1.0.0', '<')) {
-            $idx = ee()->db->query("SHOW INDEX FROM exp_form_builder_submissions WHERE Key_name = 'idx_submitted_at'")->num_rows();
-            if ($idx === 0) {
-                ee()->db->query('ALTER TABLE exp_form_builder_submissions ADD INDEX idx_submitted_at (submitted_at)');
-            }
+        // Originally introduced in 1.0.1
+        $fields = ee()->db->query("SHOW COLUMNS FROM {$p}form_builder_fields LIKE 'field_header'")->num_rows();
+        if ($fields === 0) {
+            ee()->dbforge->add_column('form_builder_fields', array(
+                'field_header' => array(
+                    'type'       => 'VARCHAR',
+                    'constraint' => 255,
+                    'null'       => true
+                )
+            ));
         }
 
-        if (version_compare($current, '1.0.1', '<')) {
-            // Add field_header column if missing
-            $fields = ee()->db->query("SHOW COLUMNS FROM exp_form_builder_fields LIKE 'field_header'")->num_rows();
-            if ($fields === 0) {
-                ee()->dbforge->add_column('form_builder_fields', array(
-                    'field_header' => array(
-                        'type'       => 'VARCHAR',
-                        'constraint' => 255,
-                        'null'       => true
-                    )
-                ));
-            }
-
-            // Add confirm column if missing
-            $cols = ee()->db->query("SHOW COLUMNS FROM exp_form_builder_fields LIKE 'confirm'")->num_rows();
-            if ($cols === 0) {
-                ee()->dbforge->add_column('form_builder_fields', array(
-                    'confirm' => array(
-                        'type'       => 'CHAR',
-                        'constraint' => 1,
-                        'default'    => 'n'
-                    )
-                ));
-            }
+        $cols = ee()->db->query("SHOW COLUMNS FROM {$p}form_builder_fields LIKE 'confirm'")->num_rows();
+        if ($cols === 0) {
+            ee()->dbforge->add_column('form_builder_fields', array(
+                'confirm' => array(
+                    'type'       => 'CHAR',
+                    'constraint' => 1,
+                    'default'    => 'n'
+                )
+            ));
         }
 
-        if (version_compare($current, '1.0.3', '<')) {
-            $col = ee()->db->query("SHOW COLUMNS FROM exp_form_builder_fields LIKE 'is_header'")->num_rows();
-            if ($col > 0) {
-                ee()->dbforge->drop_column('form_builder_fields', 'is_header');
-            }
+        // Originally introduced in 1.0.3
+        $col = ee()->db->query("SHOW COLUMNS FROM {$p}form_builder_fields LIKE 'is_header'")->num_rows();
+        if ($col > 0) {
+            ee()->dbforge->drop_column('form_builder_fields', 'is_header');
         }
 
-        if (version_compare($current, '1.0.4', '<')) {
-            ee()->db->query("UPDATE exp_form_builder_fields SET placeholder   = '' WHERE placeholder   IS NULL");
-            ee()->db->query("UPDATE exp_form_builder_fields SET default_value = '' WHERE default_value IS NULL");
-            ee()->db->query("UPDATE exp_form_builder_fields SET css_class     = '' WHERE css_class     IS NULL");
+        // Originally introduced in 1.0.4 — safe to re-run: once a row's value
+        // is no longer NULL, the WHERE clause simply matches nothing for it.
+        ee()->db->query("UPDATE {$p}form_builder_fields SET placeholder   = '' WHERE placeholder   IS NULL");
+        ee()->db->query("UPDATE {$p}form_builder_fields SET default_value = '' WHERE default_value IS NULL");
+        ee()->db->query("UPDATE {$p}form_builder_fields SET css_class     = '' WHERE css_class     IS NULL");
+
+        // Originally introduced in 1.1.0
+        $col = ee()->db->query("SHOW COLUMNS FROM {$p}form_builder_fields LIKE 'field_config'")->num_rows();
+        if ($col === 0) {
+            ee()->dbforge->add_column('form_builder_fields', array(
+                'field_config' => array(
+                    'type' => 'TEXT',
+                    'null' => true
+                )
+            ));
         }
 
-        if (version_compare($current, '1.1.0', '<')) {
-            // Add field_config column to fields table
-            $col = ee()->db->query("SHOW COLUMNS FROM exp_form_builder_fields LIKE 'field_config'")->num_rows();
-            if ($col === 0) {
-                ee()->dbforge->add_column('form_builder_fields', array(
-                    'field_config' => array(
-                        'type' => 'TEXT',
-                        'null' => true
-                    )
-                ));
-            }
-
-            // Add mailchimp_status column to submissions table
-            $col = ee()->db->query("SHOW COLUMNS FROM exp_form_builder_submissions LIKE 'mailchimp_status'")->num_rows();
-            if ($col === 0) {
-                ee()->dbforge->add_column('form_builder_submissions', array(
-                    'mailchimp_status' => array(
-                        'type'       => 'VARCHAR',
-                        'constraint' => 32,
-                        'default'    => 'none'
-                    )
-                ));
-                $idx = ee()->db->query("SHOW INDEX FROM exp_form_builder_submissions WHERE Key_name = 'idx_mailchimp_status'")->num_rows();
-                if ($idx === 0) {
-                    ee()->db->query('ALTER TABLE exp_form_builder_submissions ADD INDEX idx_mailchimp_status (mailchimp_status)');
-                }
-            }
-
-            // Add per-form Mailchimp success/failure text columns
-            $col = ee()->db->query("SHOW COLUMNS FROM exp_form_builder_forms LIKE 'mailchimp_success_text'")->num_rows();
-            if ($col === 0) {
-                ee()->dbforge->add_column('form_builder_forms', array(
-                    'mailchimp_success_text' => array(
-                        'type' => 'TEXT',
-                        'null' => true
-                    ),
-                    'mailchimp_failure_text' => array(
-                        'type' => 'TEXT',
-                        'null' => true
-                    )
-                ));
-            }
-
-            // Create mailchimp_lists cache table
-            if (!ee()->db->table_exists('form_builder_mailchimp_lists')) {
-                ee()->dbforge->add_field(array(
-                    'list_id' => array(
-                        'type'       => 'VARCHAR',
-                        'constraint' => 32
-                    ),
-                    'site_id' => array(
-                        'type'     => 'INT',
-                        'unsigned' => true,
-                        'default'  => 1
-                    ),
-                    'list_name' => array(
-                        'type'       => 'VARCHAR',
-                        'constraint' => 255
-                    ),
-                    'member_count' => array(
-                        'type'     => 'INT',
-                        'unsigned' => true,
-                        'default'  => 0
-                    ),
-                    'cached_at' => array(
-                        'type' => 'DATETIME',
-                        'null' => true
-                    )
-                ));
-                ee()->dbforge->add_key('list_id', true);
-                ee()->dbforge->add_key('site_id');
-                ee()->dbforge->create_table('form_builder_mailchimp_lists');
-            }
-
-            // Insert default Mailchimp settings if they don't exist
-            $site_id = ee()->config->item('site_id');
-            $mc_defaults = array(
-                'mailchimp_api_key'      => '',
-                'mailchimp_alerts_email' => ''
-            );
-            foreach ($mc_defaults as $key => $value) {
-                $exists = ee()->db->where('site_id', $site_id)
-                    ->where('setting_key', $key)
-                    ->count_all_results('form_builder_settings');
-                if ($exists === 0) {
-                    ee()->db->insert('form_builder_settings', array(
-                        'site_id'       => $site_id,
-                        'setting_key'   => $key,
-                        'setting_value' => $value
-                    ));
-                }
-            }
+        $col = ee()->db->query("SHOW COLUMNS FROM {$p}form_builder_submissions LIKE 'mailchimp_status'")->num_rows();
+        if ($col === 0) {
+            ee()->dbforge->add_column('form_builder_submissions', array(
+                'mailchimp_status' => array(
+                    'type'       => 'VARCHAR',
+                    'constraint' => 32,
+                    'default'    => 'none'
+                )
+            ));
+        }
+        // Checked separately from the column add above (not nested inside
+        // that "if column missing" block) so a site that already has the
+        // column but never got the index — the exact class of drift this
+        // whole rewrite is meant to catch — still gets it.
+        $idx = ee()->db->query("SHOW INDEX FROM {$p}form_builder_submissions WHERE Key_name = 'idx_mailchimp_status'")->num_rows();
+        if ($idx === 0) {
+            ee()->db->query("ALTER TABLE {$p}form_builder_submissions ADD INDEX idx_mailchimp_status (mailchimp_status)");
         }
 
-        if (version_compare($current, '1.1.1', '<')) {
-            if (!ee()->db->table_exists('form_builder_mailchimp_merge_tags')) {
-                ee()->dbforge->add_field(array(
-                    'id' => array('type' => 'INT', 'unsigned' => true, 'auto_increment' => true),
-                    'list_id' => array('type' => 'VARCHAR', 'constraint' => 32),
-                    'site_id' => array('type' => 'INT', 'unsigned' => true, 'default' => 1),
-                    'tag' => array('type' => 'VARCHAR', 'constraint' => 32),
-                    'name' => array('type' => 'VARCHAR', 'constraint' => 255),
-                    'cached_at' => array('type' => 'DATETIME', 'null' => true)
-                ));
-                ee()->dbforge->add_key('id', true);
-                ee()->dbforge->add_key('site_id');
-                ee()->dbforge->create_table('form_builder_mailchimp_merge_tags');
-            }
+        $col = ee()->db->query("SHOW COLUMNS FROM {$p}form_builder_forms LIKE 'mailchimp_success_text'")->num_rows();
+        if ($col === 0) {
+            ee()->dbforge->add_column('form_builder_forms', array(
+                'mailchimp_success_text' => array(
+                    'type' => 'TEXT',
+                    'null' => true
+                ),
+                'mailchimp_failure_text' => array(
+                    'type' => 'TEXT',
+                    'null' => true
+                )
+            ));
         }
 
-        if (version_compare($current, '1.1.2', '<')) {
-            if (!ee()->db->table_exists('form_builder_mailchimp_sub_tags')) {
-                ee()->dbforge->add_field(array(
-                    'id' => array('type' => 'INT', 'unsigned' => true, 'auto_increment' => true),
-                    'list_id' => array('type' => 'VARCHAR', 'constraint' => 32),
-                    'site_id' => array('type' => 'INT', 'unsigned' => true, 'default' => 1),
-                    'name' => array('type' => 'VARCHAR', 'constraint' => 255),
-                    'cached_at' => array('type' => 'DATETIME', 'null' => true)
-                ));
-                ee()->dbforge->add_key('id', true);
-                ee()->dbforge->add_key('site_id');
-                ee()->dbforge->create_table('form_builder_mailchimp_sub_tags');
-            }
+        if (!ee()->db->table_exists('form_builder_mailchimp_lists')) {
+            ee()->dbforge->add_field(array(
+                'list_id' => array(
+                    'type'       => 'VARCHAR',
+                    'constraint' => 32
+                ),
+                'site_id' => array(
+                    'type'     => 'INT',
+                    'unsigned' => true,
+                    'default'  => 1
+                ),
+                'list_name' => array(
+                    'type'       => 'VARCHAR',
+                    'constraint' => 255
+                ),
+                'member_count' => array(
+                    'type'     => 'INT',
+                    'unsigned' => true,
+                    'default'  => 0
+                ),
+                'cached_at' => array(
+                    'type' => 'DATETIME',
+                    'null' => true
+                )
+            ));
+            ee()->dbforge->add_key('list_id', true);
+            ee()->dbforge->add_key('site_id');
+            ee()->dbforge->create_table('form_builder_mailchimp_lists');
         }
 
-        if (version_compare($current, '1.1.3', '<')) {
-            $col = ee()->db->query("SHOW COLUMNS FROM exp_form_builder_submissions LIKE 'mailchimp_error'")->num_rows();
-            if ($col === 0) {
-                ee()->dbforge->add_column('form_builder_submissions', array(
-                    'mailchimp_error' => array('type' => 'TEXT', 'null' => true)
+        // Insert default Mailchimp settings if they don't exist
+        $site_id = ee()->config->item('site_id');
+        $mc_defaults = array(
+            'mailchimp_api_key'      => '',
+            'mailchimp_alerts_email' => ''
+        );
+        foreach ($mc_defaults as $key => $value) {
+            $exists = ee()->db->where('site_id', $site_id)
+                ->where('setting_key', $key)
+                ->count_all_results('form_builder_settings');
+            if ($exists === 0) {
+                ee()->db->insert('form_builder_settings', array(
+                    'site_id'       => $site_id,
+                    'setting_key'   => $key,
+                    'setting_value' => $value
                 ));
             }
         }
+
+        // Originally introduced in 1.1.1
+        if (!ee()->db->table_exists('form_builder_mailchimp_merge_tags')) {
+            ee()->dbforge->add_field(array(
+                'id' => array('type' => 'INT', 'unsigned' => true, 'auto_increment' => true),
+                'list_id' => array('type' => 'VARCHAR', 'constraint' => 32),
+                'site_id' => array('type' => 'INT', 'unsigned' => true, 'default' => 1),
+                'tag' => array('type' => 'VARCHAR', 'constraint' => 32),
+                'name' => array('type' => 'VARCHAR', 'constraint' => 255),
+                'cached_at' => array('type' => 'DATETIME', 'null' => true)
+            ));
+            ee()->dbforge->add_key('id', true);
+            ee()->dbforge->add_key('site_id');
+            ee()->dbforge->create_table('form_builder_mailchimp_merge_tags');
+        }
+
+        // Originally introduced in 1.1.2
+        if (!ee()->db->table_exists('form_builder_mailchimp_sub_tags')) {
+            ee()->dbforge->add_field(array(
+                'id' => array('type' => 'INT', 'unsigned' => true, 'auto_increment' => true),
+                'list_id' => array('type' => 'VARCHAR', 'constraint' => 32),
+                'site_id' => array('type' => 'INT', 'unsigned' => true, 'default' => 1),
+                'name' => array('type' => 'VARCHAR', 'constraint' => 255),
+                'cached_at' => array('type' => 'DATETIME', 'null' => true)
+            ));
+            ee()->dbforge->add_key('id', true);
+            ee()->dbforge->add_key('site_id');
+            ee()->dbforge->create_table('form_builder_mailchimp_sub_tags');
+        }
+
+        // Originally introduced in 1.1.3
+        $col = ee()->db->query("SHOW COLUMNS FROM {$p}form_builder_submissions LIKE 'mailchimp_error'")->num_rows();
+        if ($col === 0) {
+            ee()->dbforge->add_column('form_builder_submissions', array(
+                'mailchimp_error' => array('type' => 'TEXT', 'null' => true)
+            ));
+        }
+
+        // Introduced in 1.3.0 — form templates (save-as / new-from). Idempotent.
+        if (!ee()->db->table_exists('form_builder_templates')) {
+            $this->createTemplatesTable();
+        }
+        $this->insertBuiltinTemplates();
+
+        // Introduced in 1.3.1 — submit() now fires the 'form_builder_submission_saved'
+        // extension hook after a successful save (see submit()). No schema change; this
+        // is a no-op until some other add-on registers an extension for that hook.
 
         return true;
+    }
+
+    /**
+     * Templates: a JSON snapshot of a form's settings + fields (v1.3.0).
+     */
+    private function createTemplatesTable()
+    {
+        ee()->dbforge->add_field(array(
+            'template_id' => array('type' => 'INT', 'unsigned' => true, 'auto_increment' => true),
+            'site_id'     => array('type' => 'INT', 'unsigned' => true, 'default' => 1),
+            'name'        => array('type' => 'VARCHAR', 'constraint' => 150),
+            'description' => array('type' => 'VARCHAR', 'constraint' => 500, 'null' => true),
+            'definition'  => array('type' => 'MEDIUMTEXT'),
+            'is_builtin'  => array('type' => 'CHAR', 'constraint' => 1, 'default' => 'n'),
+            'created_at'  => array('type' => 'DATETIME', 'null' => true),
+            'updated_at'  => array('type' => 'DATETIME', 'null' => true),
+        ));
+        ee()->dbforge->add_key('template_id', true);
+        ee()->dbforge->add_key('site_id');
+        ee()->dbforge->create_table('form_builder_templates');
+    }
+
+    /**
+     * Seed the shipped templates once per site (keyed on name). Never overwrites
+     * a template the site has edited or deleted-and-recreated under the same name.
+     */
+    private function insertBuiltinTemplates()
+    {
+        if (!class_exists('Form_builder')) {
+            require_once PATH_THIRD . 'form_builder/mod.form_builder.php';
+        }
+        $site_id = ee()->config->item('site_id');
+        $now     = date('Y-m-d H:i:s');
+        foreach (Form_builder::builtinTemplates() as $tpl) {
+            $exists = ee()->db->where('site_id', $site_id)
+                ->where('name', $tpl['name'])
+                ->count_all_results('form_builder_templates');
+            if ($exists > 0) {
+                continue;
+            }
+            ee()->db->insert('form_builder_templates', array(
+                'site_id'     => $site_id,
+                'name'        => $tpl['name'],
+                'description' => $tpl['description'],
+                'definition'  => json_encode($tpl['definition'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'is_builtin'  => 'y',
+                'created_at'  => $now,
+                'updated_at'  => $now,
+            ));
+        }
     }
 }

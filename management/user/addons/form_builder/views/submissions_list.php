@@ -48,7 +48,15 @@
                                 <?php if (!empty($form_fields)): ?>
                                     <td><?= htmlspecialchars($sub['submitted_at']) ?></td>
                                     <?php foreach ($form_fields as $field_key => $field_label): ?>
-                                        <td class="sub-cell"><span class="sub-cell__text"><?= htmlspecialchars($sub['submission_data'][$field_key]['value'] ?? '') ?></span></td>
+                                        <?php
+                                            $cell_value = $sub['submission_data'][$field_key]['value'] ?? '';
+                                            $cell_type  = $sub['submission_data'][$field_key]['type'] ?? '';
+                                            if (Form_builder::isCompositeType($cell_type)) {
+                                                $cell_rows  = Form_builder::decodeCompositeValue($cell_value);
+                                                $cell_value = count($cell_rows) . ' ' . (count($cell_rows) === 1 ? 'entry' : 'entries');
+                                            }
+                                        ?>
+                                        <td class="sub-cell"><span class="sub-cell__text"><?= htmlspecialchars((string) $cell_value) ?></span></td>
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <td class="sub-cell"><span class="sub-cell__text"><?= htmlspecialchars($sub['form_label']) ?></span></td>
