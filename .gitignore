@@ -9,3 +9,11 @@ sitemap.xml
 CLAUDE.md
 technical-spec.md
 EE-ADDON-BUILDER-ISSUES.md
+
+# Development-only files: never deployed to the server
+management/user/addons/event_calendar/tests/
+management/user/addons/event_calendar/DEVELOPMENT_NOTES.md
+
+# Claude Code files (CLAUDE.md is ignored above; this adds local overrides and the .claude folder)
+CLAUDE.local.md
+.claude/
