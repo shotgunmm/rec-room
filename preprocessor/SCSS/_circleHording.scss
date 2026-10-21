@@ -77,7 +77,8 @@
 				}
 
 				p,
-				li {
+				li,
+				.desc {
 					color: $white;
 					font: 500 18px $pub;
 					letter-spacing: 0.05em;
@@ -113,6 +114,62 @@
 				@media (min-width: 992px) {
 					height: 480px;
 				}
+
+				// Keep the text clear of the star and scroll it when it outgrows the box
+				.text {
+					// on small screens the star hangs ~50px into the box, so start below it
+					margin-top: 3.25rem;
+					max-height: calc(100% - 4.5rem);
+					max-width: 410px;
+					overflow-y: auto;
+					scrollbar-color: rgba($white, 0.6) transparent;
+					scrollbar-width: thin;
+					width: 100%;
+
+					@media (min-width: 600px) {
+						// end the box where the star starts (110px wide, same right inset as
+						// this box) so the star never covers the text or its scrollbar
+						margin-right: 110px;
+						margin-top: 0;
+						max-height: calc(100% - 2.5rem);
+						max-width: none;
+						min-width: 0;
+						padding-inline: 1.5rem 0.75rem;
+					}
+
+					// each event (a clicked date's events, and the default recurring list) is wrapped
+					// in .event: space between them plus a divider
+					.event {
+						+ .event {
+							border-top: 1px solid rgba($white, 0.4);
+							margin-top: 1rem;
+							padding-top: 1rem;
+						}
+
+						> :last-child {
+							margin-bottom: 0;
+						}
+					}
+
+					// a clicked date's events (div.event) get double the spacing around the divider;
+					// the default recurring list (li.event) keeps the tighter spacing
+					div.event + div.event {
+						margin-top: 2rem;
+						padding-top: 2rem;
+					}
+
+					// no bullets: the dividers separate the items
+					ul {
+						list-style: none;
+						padding-left: 0;
+					}
+
+					@media (min-width: 992px) {
+						// narrower desktops push the circle ~57px off the left of the screen;
+						// pad the text back on-screen (no extra padding once the container is centred)
+						padding-left: max(1.5rem, calc(74px - max(0px, (100vw - 1520px) / 2)));
+					}
+				}
 			}
 
 			a {
@@ -131,6 +188,17 @@
 
 			@media (min-width: 992px) {
 				margin-left: 500px;
+			}
+		}
+
+		// calendar_display = none: the circle is positioned against this container, so keep it as
+		// tall as it is with a calendar (500px offset + calendar on small screens) or the circle
+		// would be clipped to the section padding
+		&.no-calendar .container {
+			min-height: 852px;
+
+			@media (min-width: 992px) {
+				min-height: 352px;
 			}
 		}
 	}

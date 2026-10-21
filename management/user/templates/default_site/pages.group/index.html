@@ -249,7 +249,8 @@
 {/page_content:doc_download}
 
 {page_content:calendar}
-<section class="circle-hording calender-hording">
+{content}
+<section class="circle-hording calender-hording{if content:calendar_display == 'none'} no-calendar{/if}">
 	<div class="container gx-0 d-flex justify-content-center" style="max-width: 1520px">
 		<div class="circle">
 			<div class="border-wrap d-flex align-items-center justify-content-center justify-content-md-end">
@@ -257,7 +258,6 @@
           <img src="/images/logo-stars.svg" alt="" width="110" height="198" />
         </div>
 				<div class="text">
-					{content}
 					{if content:header}
 					<div class="head mb-3">
 						<h2{if content:header_color} class="header-{content:header_color}"{/if}>{content:header}</h2>
@@ -267,22 +267,40 @@
           {if content:show_events_in_circle}
 					<ul>
 					{exp:event_calendar:events_list recurring="yes" single="no" limit="10" status="open" var_prefix="ev"}
-					<li><strong>{ev:day_of_week}: {ev:title}</strong>{if ev:short_description} - {ev:short_description}{/if}</li>
+					<li class="event"><strong>{ev:day_of_week}: {ev:title}</strong>{if ev:short_description} - {ev:short_description}{/if}</li>
 					{/exp:event_calendar:events_list}
 					</ul>
           {/if}
-          {/content}
 				</div>
 			</div>
 		</div>
+		{!-- calendar_display: none = no calendar, single / recurring = only that type, both (or unset) = both --}
+		{if content:calendar_display == 'none'}
+		{if:elseif content:calendar_display == 'single'}
 		{exp:event_calendar:display
       single="yes"
       recurring="no"
       status="open"
       detail_url="{site_url}event-detail"
     }
+		{if:elseif content:calendar_display == 'recurring'}
+		{exp:event_calendar:display
+      single="no"
+      recurring="yes"
+      status="open"
+      detail_url="{site_url}event-detail"
+    }
+		{if:else}
+		{exp:event_calendar:display
+      single="yes"
+      recurring="yes"
+      status="open"
+      detail_url="{site_url}event-detail"
+    }
+		{/if}
 	</div>
 </section>
+{/content}
 {/page_content:calendar}
 
 {page_content:schedule}
