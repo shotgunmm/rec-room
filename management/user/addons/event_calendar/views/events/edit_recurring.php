@@ -11,6 +11,9 @@
  * @var string $url             Pre-filled link URL (htmlspecialchars'd)
  * @var string $banner_image_field   Rendered EE drag-and-drop file field HTML
  * @var string $day_of_week     Selected day of week (0-6 string)
+ * @var string $start_date      Pre-filled start date, YYYY-MM-DD (htmlspecialchars'd)
+ * @var string $end_date        Pre-filled end date, YYYY-MM-DD, empty when open-ended (htmlspecialchars'd)
+ * @var string $start_date_note Note shown when the start date was defaulted (may be empty)
  * @var string $start_time      Pre-filled start time (htmlspecialchars'd)
  * @var string $end_time        Pre-filled end time (htmlspecialchars'd)
  * @var string $status          Current status value
@@ -75,6 +78,29 @@
 
     <fieldset class="fieldset-required">
         <div class="field-instruct">
+            <label><?= lang('start_date') ?></label>
+            <em><?= lang('start_date_hint') ?></em>
+        </div>
+        <div class="field-control">
+            <input type="date" name="start_date" value="<?= $start_date ?>" required>
+            <?php if (!empty($start_date_note)): ?>
+                <p><em><?= htmlspecialchars($start_date_note) ?></em></p>
+            <?php endif ?>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <div class="field-instruct">
+            <label><?= lang('end_date') ?></label>
+            <em><?= lang('end_date_hint') ?></em>
+        </div>
+        <div class="field-control">
+            <input type="date" name="end_date" value="<?= $end_date ?>">
+        </div>
+    </fieldset>
+
+    <fieldset class="fieldset-required">
+        <div class="field-instruct">
             <label><?= lang('start_time') ?></label>
             <?= $name_badges['start_time'] ?? '' ?>
         </div>
@@ -110,6 +136,7 @@
         <div class="field-instruct">
             <label><?= lang('banner_image') ?></label>
             <?= $name_badges['banner_image'] ?? '' ?>
+            <em><?= lang('banner_image_hint') ?></em>
         </div>
         <div class="field-control">
             <?= $banner_image_field ?>

@@ -183,7 +183,7 @@ class Event_calendar_mcp
 
     // -------------------------------------------------------------------------
 
-    private function _parse_hhmm(string $value): int|false
+    private function _parse_hhmm(string $value, int $year = 1970, int $month = 1, int $day = 1): int|false
     {
         if (!preg_match('/^(\d{2}):(\d{2})$/', $value, $m)) {
             return false;
@@ -193,7 +193,34 @@ class Event_calendar_mcp
         if ($h > 23 || $i > 59) {
             return false;
         }
-        return mktime($h, $i, 0, 1, 1, 1970);
+        return mktime($h, $i, 0, $month, $day, $year);
+    }
+
+    /**
+     * Parse a YYYY-MM-DD value (HTML date input).
+     *
+     * @return int[]|false [year, month, day], or false when not a real date
+     */
+    private function _parse_ymd(string $value): array|false
+    {
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $value, $m)) {
+            return false;
+        }
+        $year  = (int) $m[1];
+        $month = (int) $m[2];
+        $day   = (int) $m[3];
+        if ($year < 2000 || $year > 2100 || !checkdate($month, $day, $year)) {
+            return false;
+        }
+        return [$year, $month, $day];
+    }
+
+    /** Weekly RRULE for a recurring event; an end-of-day timestamp becomes UNTIL. */
+    private function _weekly_rrule(int $dow, ?int $until_ts): string
+    {
+        $rrule = 'FREQ=WEEKLY;BYDAY=' . ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][$dow];
+
+        return $until_ts ? $rrule . ';UNTIL=' . gmdate('Ymd\THis\Z', $until_ts) : $rrule;
     }
 
     // -------------------------------------------------------------------------
@@ -424,7 +451,8 @@ class Event_calendar_mcp
         $per_page = in_array($per_page, $allowed) ? $per_page : 10;
         $_SESSION['calendar_per_page'] = $per_page;
 
-        $offset = (int) (ee()->input->get('page') ?: 0);
+        // EE's pagination links carry a 1-based page number in `page`
+        $page = max(1, (int) (ee()->input->get('page') ?: 1));
 
         // Filters
         $type_filter   = ee()->input->get('type')          ?: 'all';
@@ -462,7 +490,7 @@ class Event_calendar_mcp
         $sort_col_label = array_key_exists($sort_col_raw, $col_map) ? $sort_col_raw : $start_time_label;
 
         // Query — use explicit table alias so JOIN doesn't cause ambiguity
-        ee()->db->select('e.id, e.title, e.status, e.start_time, e.end_time, e.rrule,
+        ee()->db->select('e.id, e.title, e.status, e.start_time, e.end_time, e.rrule, e.recurrence_end,
                           IF(e.rrule IS NULL, "single", "recurring") AS event_type', FALSE)
                 ->from('exp_calendar_events e')
                 ->where('e.site_id', $site_id);
@@ -483,7 +511,9 @@ class Event_calendar_mcp
         $all_events = ee()->db->order_by($sort_db_col, strtoupper($sort_dir))->get()->result_array();
 
         $total      = count($all_events);
-        $all_events = array_slice($all_events, $offset, $per_page);
+        // a filter or per-page change can leave the requested page past the end
+        $page       = min($page, max(1, (int) ceil($total / $per_page)));
+        $all_events = array_slice($all_events, ($page - 1) * $per_page, $per_page);
 
         // Batch-load categories for the visible page of events
         $event_ids    = array_column($all_events, 'id');
@@ -519,9 +549,15 @@ class Event_calendar_mcp
 
         $table_data = [];
         foreach ($all_events as $event) {
-            $end_date = ee()->localize->format_date('%F %j, %Y', $event['end_time']);
-            $end_time = ee()->localize->format_date('%g:%i %A', $event['end_time']);
-            $end_cell = $end_date . '<br>' . $end_time;
+            if ($event['event_type'] === 'single') {
+                $end_date = ee()->localize->format_date('%F %j, %Y', $event['end_time']);
+                $end_time = ee()->localize->format_date('%g:%i %A', $event['end_time']);
+                $end_cell = $end_date . '<br>' . $end_time;
+            } else {
+                // Recurring times are stored as time-of-day on 1970-01-01 (see _parse_hhmm); show time only.
+                // date() matches the edit form, which reads these values back with date('H:i').
+                $end_cell = date('g:i A', (int) $event['end_time']);
+            }
 
             if ($event['event_type'] === 'single') {
                 $type_label = lang('single_event');
@@ -531,10 +567,26 @@ class Event_calendar_mcp
             } else {
                 $type_label = lang('recurring_event');
                 $dow_labels = [lang('sunday'), lang('monday'), lang('tuesday'), lang('wednesday'), lang('thursday'), lang('friday'), lang('saturday')];
-                $dow_label  = $dow_labels[(int) date('w', $event['start_time'])] ?? '';
-                $start_date = ee()->localize->format_date('%F %j, %Y', $event['start_time']);
-                $start_time = ee()->localize->format_date('%g:%i %A', $event['start_time']);
-                $time_col   = $dow_label . '<br>' . $start_date . '<br>' . $start_time;
+                // The chosen day lives in the RRULE (BYDAY=XX); start_time is a 1970 anchor and has no real weekday.
+                $byday_map  = ['SU' => 0, 'MO' => 1, 'TU' => 2, 'WE' => 3, 'TH' => 4, 'FR' => 5, 'SA' => 6];
+                $dow_label  = '';
+                if (preg_match('/BYDAY=([A-Z]{2}(?:,[A-Z]{2})*)/', (string) $event['rrule'], $by)) {
+                    $labels = [];
+                    foreach (explode(',', $by[1]) as $code) {
+                        if (isset($byday_map[$code])) {
+                            $labels[] = $dow_labels[$byday_map[$code]];
+                        }
+                    }
+                    $dow_label = implode(', ', $labels);
+                }
+                $time_col   = $dow_label . '<br>' . date('g:i A', (int) $event['start_time']);
+                // Legacy recurring events (1970-01-01 start) have no real start date to show
+                if ((int) date('Y', (int) $event['start_time']) > 1970) {
+                    $time_col .= '<br>' . lang('recurring_from') . ' ' . date('M j, Y', (int) $event['start_time']);
+                }
+                if (!empty($event['recurrence_end'])) {
+                    $time_col .= '<br>' . lang('recurring_until') . ' ' . date('M j, Y', (int) $event['recurrence_end']);
+                }
             }
 
             $status_label = $event['status'] === 'open' ? lang('open') : lang('closed');
@@ -566,12 +618,29 @@ class Event_calendar_mcp
 
         $table->setData($table_data);
 
-        $pagination = ee('CP/Pagination', [
-            'base_url'    => $base_url,
-            'total_items' => $total,
-            'per_page'    => $per_page,
-            'cur_page'    => $offset,
-        ]);
+        // Page links keep the active filters and sort ($base_url stays bare: the filter bar appends to it)
+        $page_url = ee('CP/URL')->make('addons/settings/event_calendar');
+        $keep     = ['per_page' => $per_page];
+        if ($type_filter !== 'all') {
+            $keep['type'] = $type_filter;
+        }
+        if ($status_filter !== 'all') {
+            $keep['status_filter'] = $status_filter;
+        }
+        if ($cat_filter) {
+            $keep['cat_id'] = $cat_filter;
+        }
+        foreach (['sort_col', 'sort_dir'] as $sort_param) {
+            $sort_value = ee()->input->get($sort_param);
+            if ($sort_value) {
+                $keep[$sort_param] = $sort_value;
+            }
+        }
+        $page_url->addQueryStringVariables($keep);
+
+        $pagination = ee('CP/Pagination', $total)
+            ->perPage($per_page)
+            ->currentPage($page);
 
         ee()->view->cp_page_title = lang('calendar_module_name') . ' - ' . lang('page_all_events');
         ee()->cp->set_breadcrumb(
@@ -584,7 +653,7 @@ class Event_calendar_mcp
         return [
             'body'       => ee('View')->make('event_calendar:events/index')->render([
                 'table'          => $table->viewData($base_url),
-                'pagination'     => $pagination->render($base_url),
+                'pagination'     => $pagination->render($page_url),
                 'per_page'       => $per_page,
                 'total'          => $total,
                 'base_url'       => $base_url,
@@ -959,6 +1028,8 @@ class Event_calendar_mcp
             'url'            => '',
             'banner_image_field' => ee()->file_field->dragAndDropField('banner_image', '', 'all', 'image'),
             'day_of_week'    => '',
+            'start_date'      => '',
+            'end_date'        => '',
             'start_time'      => '',
             'end_time'        => '',
             'status'          => 'open',
@@ -976,6 +1047,8 @@ class Event_calendar_mcp
             $slug_raw    = trim(strip_tags((string) ee()->input->post('slug')));
             $dow_raw     = ee()->input->post('day_of_week');
             $dow         = ($dow_raw !== FALSE && $dow_raw !== '') ? (int) $dow_raw : -1;
+            $start_date_raw = trim((string) ee()->input->post('start_date')); // YYYY-MM-DD
+            $end_date_raw   = trim((string) ee()->input->post('end_date'));   // YYYY-MM-DD, optional
             $start_raw   = (string) ee()->input->post('start_time'); // HH:MM
             $end_raw     = (string) ee()->input->post('end_time');   // HH:MM
             $status      = ee()->input->post('status');
@@ -999,11 +1072,28 @@ class Event_calendar_mcp
             if ($dow < 0 || $dow > 6) {
                 $errors[] = lang('invalid_day_of_week');
             }
-            $start_time = $this->_parse_hhmm($start_raw);
+            $start_ymd = $this->_parse_ymd($start_date_raw);
+            if ($start_date_raw === '') {
+                $errors[] = lang('start_date_required');
+            } elseif ($start_ymd === false) {
+                $errors[] = lang('start_date_invalid');
+            }
+            $end_ymd = null;
+            if ($end_date_raw !== '') {
+                $end_ymd = $this->_parse_ymd($end_date_raw);
+                if ($end_ymd === false) {
+                    $errors[] = lang('end_date_invalid');
+                } elseif ($start_ymd && $end_ymd < $start_ymd) {
+                    $errors[] = lang('invalid_end_date');
+                }
+            }
+            // start/end time-of-day both land on the start date, so end - start stays the duration
+            [$sy, $sm, $sd] = $start_ymd ?: [1970, 1, 1];
+            $start_time = $this->_parse_hhmm($start_raw, $sy, $sm, $sd);
             if ($start_time === false) {
                 $errors[] = lang('start_time_invalid_recurring');
             }
-            $end_time = $this->_parse_hhmm($end_raw);
+            $end_time = $this->_parse_hhmm($end_raw, $sy, $sm, $sd);
             if ($end_time === false) {
                 $errors[] = lang('end_time_invalid_recurring');
             }
@@ -1020,8 +1110,8 @@ class Event_calendar_mcp
             if (empty($errors)) {
                 $now     = ee()->localize->now;
                 $site_id = ee()->config->item('site_id');
-                $byday   = ['SU','MO','TU','WE','TH','FR','SA'][$dow];
-                $rrule   = 'FREQ=WEEKLY;BYDAY=' . $byday;
+                $until_ts = $end_ymd ? mktime(23, 59, 59, $end_ymd[1], $end_ymd[2], $end_ymd[0]) : null;
+                $rrule    = $this->_weekly_rrule($dow, $until_ts);
 
                 ee()->db->insert('exp_calendar_events', [
                     'site_id'        => $site_id,
@@ -1036,7 +1126,7 @@ class Event_calendar_mcp
                     'end_time'   => $end_time,
                     'all_day'    => 0,
                     'rrule'      => $rrule,
-                    'recurrence_end' => null,
+                    'recurrence_end' => $until_ts,
                     'status'         => $status,
                     'created_at'     => $now,
                     'updated_at'     => $now,
@@ -1060,6 +1150,8 @@ class Event_calendar_mcp
             $vars['short_description_field'] = $this->_rte_field('short_description', $short_description);
             $vars['event_details_field'] = $this->_rte_field('event_details', $event_details);
             $vars['day_of_week']  = $dow_raw;
+            $vars['start_date']   = htmlspecialchars($start_date_raw);
+            $vars['end_date']     = htmlspecialchars($end_date_raw);
             $vars['start_time']   = htmlspecialchars($start_raw);
             $vars['end_time']     = htmlspecialchars($end_raw);
             $vars['status']       = in_array($status, ['open', 'closed']) ? $status : 'open';
@@ -1094,7 +1186,7 @@ class Event_calendar_mcp
         $all_categories = $this->_load_categories($cat_group_id);
 
         $event = ee()->db
-            ->select('id, title, slug, short_description, event_details, url, banner_image, start_time, end_time, status, rrule')
+            ->select('id, title, slug, short_description, event_details, url, banner_image, start_time, end_time, recurrence_end, created_at, status, rrule')
             ->where('id', $id)
             ->where('site_id', $site_id)
             ->where('rrule IS NOT NULL', NULL, FALSE)
@@ -1126,6 +1218,13 @@ class Event_calendar_mcp
             $dow_from_rrule = (string) ($byday_map[$m[1]] ?? '');
         }
 
+        // Events saved before start dates existed carry a 1970-01-01 start; default those to the
+        // day the event was created so the required field is pre-filled with something real.
+        $legacy_start     = (int) date('Y', (int) $event['start_time']) <= 1970;
+        $start_date_value = $legacy_start
+            ? ((int) $event['created_at'] > 0 ? date('Y-m-d', (int) $event['created_at']) : '')
+            : date('Y-m-d', (int) $event['start_time']);
+
         $vars = [
             'errors'          => [],
             'event_id'        => $id,
@@ -1136,6 +1235,9 @@ class Event_calendar_mcp
             'url'         => htmlspecialchars($event['url'] ?? ''),
             'banner_image_field' => ee()->file_field->dragAndDropField('banner_image', $event['banner_image'] ?? '', 'all', 'image'),
             'day_of_week' => $dow_from_rrule,
+            'start_date'      => $start_date_value,
+            'start_date_note' => $legacy_start ? lang('start_date_defaulted') : '',
+            'end_date'        => !empty($event['recurrence_end']) ? date('Y-m-d', (int) $event['recurrence_end']) : '',
             'start_time'      => date('H:i', (int) $event['start_time']),
             'end_time'        => date('H:i', (int) $event['end_time']),
             'status'          => $event['status'],
@@ -1153,6 +1255,8 @@ class Event_calendar_mcp
             $slug_raw    = trim(strip_tags((string) ee()->input->post('slug')));
             $dow_raw     = ee()->input->post('day_of_week');
             $dow         = ($dow_raw !== FALSE && $dow_raw !== '') ? (int) $dow_raw : -1;
+            $start_date_raw = trim((string) ee()->input->post('start_date')); // YYYY-MM-DD
+            $end_date_raw   = trim((string) ee()->input->post('end_date'));   // YYYY-MM-DD, optional
             $start_raw   = (string) ee()->input->post('start_time'); // HH:MM
             $end_raw     = (string) ee()->input->post('end_time');   // HH:MM
             $status      = ee()->input->post('status');
@@ -1176,11 +1280,28 @@ class Event_calendar_mcp
             if ($dow < 0 || $dow > 6) {
                 $errors[] = lang('invalid_day_of_week');
             }
-            $start_time = $this->_parse_hhmm($start_raw);
+            $start_ymd = $this->_parse_ymd($start_date_raw);
+            if ($start_date_raw === '') {
+                $errors[] = lang('start_date_required');
+            } elseif ($start_ymd === false) {
+                $errors[] = lang('start_date_invalid');
+            }
+            $end_ymd = null;
+            if ($end_date_raw !== '') {
+                $end_ymd = $this->_parse_ymd($end_date_raw);
+                if ($end_ymd === false) {
+                    $errors[] = lang('end_date_invalid');
+                } elseif ($start_ymd && $end_ymd < $start_ymd) {
+                    $errors[] = lang('invalid_end_date');
+                }
+            }
+            // start/end time-of-day both land on the start date, so end - start stays the duration
+            [$sy, $sm, $sd] = $start_ymd ?: [1970, 1, 1];
+            $start_time = $this->_parse_hhmm($start_raw, $sy, $sm, $sd);
             if ($start_time === false) {
                 $errors[] = lang('start_time_invalid_recurring');
             }
-            $end_time = $this->_parse_hhmm($end_raw);
+            $end_time = $this->_parse_hhmm($end_raw, $sy, $sm, $sd);
             if ($end_time === false) {
                 $errors[] = lang('end_time_invalid_recurring');
             }
@@ -1195,8 +1316,8 @@ class Event_calendar_mcp
             }
 
             if (empty($errors)) {
-                $byday = ['SU','MO','TU','WE','TH','FR','SA'][$dow];
-                $rrule = 'FREQ=WEEKLY;BYDAY=' . $byday;
+                $until_ts = $end_ymd ? mktime(23, 59, 59, $end_ymd[1], $end_ymd[2], $end_ymd[0]) : null;
+                $rrule    = $this->_weekly_rrule($dow, $until_ts);
 
                 ee()->db->update(
                     'exp_calendar_events',
@@ -1210,6 +1331,7 @@ class Event_calendar_mcp
                         'start_time'  => $start_time,
                         'end_time'    => $end_time,
                         'rrule'       => $rrule,
+                        'recurrence_end' => $until_ts,
                         'status'        => $status,
                         'updated_at'    => ee()->localize->now,
                     ],
@@ -1233,6 +1355,8 @@ class Event_calendar_mcp
             $vars['short_description_field'] = $this->_rte_field('short_description', $short_description);
             $vars['event_details_field'] = $this->_rte_field('event_details', $event_details);
             $vars['day_of_week']  = $dow_raw;
+            $vars['start_date']   = htmlspecialchars($start_date_raw);
+            $vars['end_date']     = htmlspecialchars($end_date_raw);
             $vars['start_time']   = htmlspecialchars($start_raw);
             $vars['end_time']     = htmlspecialchars($end_raw);
             $vars['status']       = in_array($status, ['open', 'closed']) ? $status : 'open';

@@ -91,6 +91,7 @@
         <div class="field-instruct">
             <label><?= lang('banner_image') ?></label>
             <?= $name_badges['banner_image'] ?? '' ?>
+            <em><?= lang('banner_image_hint') ?></em>
         </div>
         <div class="field-control">
             <?= $banner_image_field ?>

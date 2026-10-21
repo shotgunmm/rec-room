@@ -96,6 +96,13 @@ class Event_calendar
 
             if ($is_recurring) {
                 if ($recurring !== 'yes') continue;
+                if ($status !== 'any') {
+                    // Not started yet (compare against the start of the start day) or already ended
+                    $start_ts = (int) $row['start_time'];
+                    $start_day = mktime(0, 0, 0, (int) date('n', $start_ts), (int) date('j', $start_ts), (int) date('Y', $start_ts));
+                    if ($start_day > ee()->localize->now) continue;
+                    if (!empty($row['recurrence_end']) && (int) $row['recurrence_end'] < ee()->localize->now) continue;
+                }
                 $results[] = $row;
             } else {
                 if ($single !== 'yes') continue;
@@ -106,7 +113,12 @@ class Event_calendar
             }
         }
 
-        usort($results, fn($a, $b) => (int) $a['start_time'] - (int) $b['start_time']);
+        // Recurring events first, ordered by time of day (their dates are just start dates), then
+        // single events by date.
+        $sort_key = fn(array $r) => !empty($r['rrule'])
+            ? [0, (int) date('G', (int) $r['start_time']) * 3600 + (int) date('i', (int) $r['start_time']) * 60]
+            : [1, (int) $r['start_time']];
+        usort($results, fn($a, $b) => $sort_key($a) <=> $sort_key($b));
         $results = array_slice($results, 0, $limit);
 
         if (empty($results)) {
@@ -138,6 +150,15 @@ class Event_calendar
         foreach ($results as $event) {
             $start_ts   = (int) $event['start_time'];
             $end_ts     = (int) $event['end_time'];
+            // A recurring row's stored start is only the first day of the series (1970 for legacy
+            // events), so its date fields, times and detail link describe the next occurrence.
+            if (!empty($event['rrule'])) {
+                $next_occ = $expander->representativeOccurrence($event['rrule'], $start_ts, ee()->localize->now);
+                if ($next_occ !== null) {
+                    $end_ts   = $next_occ + ($end_ts - $start_ts);
+                    $start_ts = $next_occ;
+                }
+            }
             $day_n      = (int) date('j', $start_ts);
             $ord_sfx    = in_array($day_n % 100, [11, 12, 13]) ? 'th'
                         : (['st', 'nd', 'rd'][$day_n % 10 - 1] ?? 'th');
@@ -150,6 +171,15 @@ class Event_calendar
             RteHelper::replacePageTags($short_description);
 
             $is_recurring_ev = !empty($event['rrule']);
+
+            // A recurring event's weekday comes from its rule; start_time's weekday is only the
+            // start date and need not match.
+            $dow_n = (int) date('w', $start_ts);
+            if ($is_recurring_ev && preg_match('/BYDAY=([A-Z]{2})/', (string) $event['rrule'], $bd)) {
+                $dow_n = ['SU' => 0, 'MO' => 1, 'TU' => 2, 'WE' => 3, 'TH' => 4, 'FR' => 5, 'SA' => 6][$bd[1]] ?? $dow_n;
+            }
+            $day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
             $event_url = '';
             if ($detail_url !== '' && !empty($event['slug'])) {
                 $event_url = $url_style_list === 'index'
@@ -174,8 +204,8 @@ class Event_calendar
                 'start_time_raw'  => $start_ts,
                 'end_time_raw'    => $end_ts,
                 'status'          => $event['status'],
-                'day_of_week'     => date('l', $start_ts),
-                'day_of_week_int' => (int) date('w', $start_ts),
+                'day_of_week'     => $day_names[$dow_n],
+                'day_of_week_int' => $dow_n,
                 'event_url'       => htmlspecialchars($event_url),
                 'categories'      => $cat_map[(int) $event['id']] ?? [],
             ];
@@ -352,15 +382,31 @@ class Event_calendar
         $occ_end      = (int) $row['end_time'];
 
         $date_key_raw = (string) ee()->uri->segment($date_seg);
-        if ($is_recurring && preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_key_raw)) {
-            $expander    = new RecurrenceExpander();
-            $day_start   = ee()->localize->string_to_timestamp($date_key_raw . ' 00:00:00');
-            $day_end     = ee()->localize->string_to_timestamp($date_key_raw . ' 23:59:59');
-            $duration    = $occ_end - $occ_start;
-            $occurrences = $expander->expand($row['rrule'], $occ_start, $day_start, $day_end);
-            if (!empty($occurrences)) {
-                $occ_start = $occurrences[0];
-                $occ_end   = $occ_start + $duration;
+        if ($is_recurring) {
+            $expander = new RecurrenceExpander();
+            $duration = $occ_end - $occ_start;
+            $picked   = false;
+
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_key_raw)) {
+                $day_start   = ee()->localize->string_to_timestamp($date_key_raw . ' 00:00:00');
+                $day_end     = ee()->localize->string_to_timestamp($date_key_raw . ' 23:59:59');
+                $occurrences = $expander->expand($row['rrule'], $occ_start, $day_start, $day_end);
+                if (!empty($occurrences)) {
+                    $occ_start = $occurrences[0];
+                    $occ_end   = $occ_start + $duration;
+                    $picked    = true;
+                }
+            }
+
+            // No date in the URL, or no occurrence on that date: show the next upcoming occurrence
+            // (else the latest past one) instead of the stored start, which is only the first day
+            // of the series (January 1, 1970 for legacy events).
+            if (!$picked) {
+                $rep = $expander->representativeOccurrence($row['rrule'], $occ_start, ee()->localize->now);
+                if ($rep !== null) {
+                    $occ_start = $rep;
+                    $occ_end   = $rep + $duration;
+                }
             }
         }
 
@@ -579,7 +625,8 @@ class Event_calendar
 
             if ($date_key === $today) {
                 $classes .= ' today';
-                $extra   .= ' data-today=""';
+                // today is the selected date on load (calendar.js does the same when it re-renders)
+                $extra   .= ' data-today="" data-active=""';
             }
 
             if (!empty($events_by_date[$date_key])) {

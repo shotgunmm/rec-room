@@ -131,8 +131,9 @@ Style these via CSS attribute selectors, for example:
 
 Access the Calendar CP at: **Add-Ons → Calendar**
 
-- **All Events** — list, edit, and delete events with pagination
-- **Add Event** — create a new event with title, description, start and end time
+- **All Events** — list, edit, and delete events with pagination; filter by type, status and category (page links keep the filters and sort)
+- **Add Event** — create a one-time event with title, description, start and end time
+- **Add Recurring Event** — create a weekly event. Choose the day of the week, a **Start Date** (required), an optional **End Date**, and the start and end time. Leave End Date blank to repeat indefinitely.
 - **Settings** — configure events per list count, weekly events header, and description
 
 ---
@@ -140,6 +141,8 @@ Access the Calendar CP at: **Add-Ons → Calendar**
 ## Timezone
 
 All event times are stored as UTC Unix timestamps. Display timezone is controlled by EE site preferences (same as EE channel entries). Configure your site timezone under **Settings → General Settings** in the EE CP.
+
+**Recurring events repeat in site-local time.** An event entered as 6:00 PM stays at 6:00 PM on every occurrence, including after daylight saving changes. Enter recurring times in the site's local time. If you change the site time zone setting later, review your recurring events.
 
 ---
 
@@ -152,6 +155,10 @@ If manual removal is ever needed, delete the `themes/user/calendar/` directory y
 ---
 
 ## Known Limitations
+
+- **Recurring event dates** — a recurring event that started more than one year ago is treated as starting one year back, so calendar months older than a year show no recurring events. Recurring events saved before start dates existed (shown without a "From" date in the CP) work the same way; open one in the CP to give it a real start date.
+
+- **Recurring events and `{exp:event_calendar:events_list}`** — recurring events return one row per event, not one per occurrence. Events whose start date is in the future, or whose end date has passed, are not listed. Recurring rows are listed first, ordered by time of day.
 
 - **`limit=` cache key** — the `{exp:calendar:events_list}` tag caches results using the limit value as part of the cache key (`calendar_events_list_{site_id}_{limit}`). If you use `limit=` to override the site default, that cache key is not automatically busted when events are created, edited, or deleted. Only the key matching the site setting default is busted. If you rely on a custom `limit=` value, you may see stale results for up to 1 hour.
 

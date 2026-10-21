@@ -171,6 +171,9 @@
             var classes = 'day';
             if (dateKey === state.today) {
                 cell.dataset.today = '';
+                // today is the selected date until another day is clicked (and again whenever
+                // the grid is re-rendered on the current month), so it gets the selected style
+                cell.dataset.active = '';
                 classes += ' today';
             }
 
@@ -346,10 +349,12 @@
         var html = '<div class="head mb-3"><h2>' + formatDateLabel(dateKey) + '</h2></div>';
         events.forEach(function (ev) {
             var url = eventDetailUrl(ev);
-            html += '<p><strong>' + ev.title + '</strong><br>'
+            html += '<div class="event">'
+                + '<p><strong>' + ev.title + '</strong><br>'
                 + extractTime(ev.start_time) + ' – ' + extractTime(ev.end_time) + '</p>'
-                + (ev.short_description ? ev.short_description : '')
-                + (url ? '<a class="cta mt-3 d-inline-block" href="' + url + '">See Details</a>' : '');
+                + (ev.short_description ? '<div class="desc">' + ev.short_description + '</div>' : '')
+                + (url ? '<a class="cta mt-3 d-inline-block" href="' + url + '">See Details</a>' : '')
+                + '</div>';
         });
         circleTextEl.innerHTML = html;
     }
