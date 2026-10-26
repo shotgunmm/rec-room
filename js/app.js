@@ -5,6 +5,7 @@ $(function () {
 	eventCollapse();
 	tagGallery();
 	modalContentClick();
+	heroSlider();
 });
 
 $(window).on('load', function () {
@@ -97,11 +98,157 @@ function modalContentClick() {
 			const name = box?.querySelector('.text .team-title')?.textContent.trim();
 			const position = box?.querySelector('.text .team-position')?.textContent.trim();
 			const bio = box?.querySelector('.text .team-bio')?.textContent.trim();
-			
+
 			if (headName && name) headName.textContent = name;
 			if (textName && name) textName.textContent = name;
 			if (modalPosition && position) modalPosition.textContent = position;
 			if (modalBio && bio) modalBio.textContent = bio;
 		});
 	});
+}
+
+// Homepage banner slideshow. The home template renders every homepage_banner row
+// as a [data-hero-slide] inside [data-hero-slides]; a single slide is left static
+// (CSS shows it), 2+ become a crossfading slideshow with dot nav + a pause/play
+// control. No-op on pages without [data-hero-slider]. Vanilla JS.
+function heroSlider() {
+	var INTERVAL = 6000; // ms between auto-advances
+
+	Array.prototype.forEach.call(document.querySelectorAll('[data-hero-slider]'), initSlider);
+
+	function initSlider(root) {
+		var wrap = root.querySelector('[data-hero-slides]');
+		if (!wrap) {
+			return;
+		}
+
+		var slides = Array.prototype.slice.call(wrap.querySelectorAll('[data-hero-slide]'));
+		if (slides.length < 2) {
+			return; // single banner: leave static
+		}
+
+		var reduceMotion = window.matchMedia
+			&& window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+		var current = 0;
+		var timer = null;
+		var hovering = false;
+		var userPaused = reduceMotion; // start paused when motion is reduced
+
+		// --- Build controls -------------------------------------------------
+		var controls = document.createElement('div');
+		controls.className = 'hero-controls';
+
+		var dots = document.createElement('div');
+		dots.className = 'hero-dots';
+		dots.setAttribute('role', 'group');
+		dots.setAttribute('aria-label', 'Choose banner slide');
+
+		var dotButtons = slides.map(function (slide, i) {
+			var dot = document.createElement('button');
+			dot.type = 'button';
+			dot.className = 'hero-dot';
+			dot.setAttribute('aria-label', 'Slide ' + (i + 1) + ' of ' + slides.length);
+			dot.addEventListener('click', function () {
+				go(i);
+				restart();
+			});
+			dots.appendChild(dot);
+			return dot;
+		});
+
+		var pauseBtn = document.createElement('button');
+		pauseBtn.type = 'button';
+		pauseBtn.className = 'hero-pause';
+		pauseBtn.addEventListener('click', function () {
+			setPaused(!userPaused);
+		});
+
+		controls.appendChild(dots);
+		controls.appendChild(pauseBtn);
+		root.appendChild(controls);
+
+		wrap.classList.add('is-ready');
+
+		// --- Behaviour ------------------------------------------------------
+		function render() {
+			slides.forEach(function (slide, i) {
+				var active = i === current;
+				slide.classList.toggle('is-active', active);
+				slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+				dotButtons[i].classList.toggle('is-active', active);
+				if (active) {
+					dotButtons[i].setAttribute('aria-current', 'true');
+				} else {
+					dotButtons[i].removeAttribute('aria-current');
+				}
+			});
+		}
+
+		function go(i) {
+			current = (i + slides.length) % slides.length;
+			render();
+		}
+
+		function next() {
+			go(current + 1);
+		}
+
+		function shouldPlay() {
+			return !userPaused && !hovering;
+		}
+
+		function updateTimer() {
+			if (shouldPlay()) {
+				if (!timer) {
+					timer = window.setInterval(next, INTERVAL);
+				}
+			} else if (timer) {
+				window.clearInterval(timer);
+				timer = null;
+			}
+		}
+
+		function restart() {
+			if (timer) {
+				window.clearInterval(timer);
+				timer = null;
+			}
+			updateTimer();
+		}
+
+		function setPaused(paused) {
+			userPaused = paused;
+			pauseBtn.classList.toggle('is-paused', paused);
+			pauseBtn.setAttribute(
+				'aria-label',
+				paused ? 'Play banner slideshow' : 'Pause banner slideshow'
+			);
+			updateTimer();
+		}
+
+		// Pause on hover / keyboard focus, resume on leave (unless user-paused).
+		root.addEventListener('mouseenter', function () {
+			hovering = true;
+			updateTimer();
+		});
+		root.addEventListener('mouseleave', function () {
+			hovering = false;
+			updateTimer();
+		});
+		root.addEventListener('focusin', function () {
+			hovering = true;
+			updateTimer();
+		});
+		root.addEventListener('focusout', function () {
+			if (!root.contains(document.activeElement)) {
+				hovering = false;
+				updateTimer();
+			}
+		});
+
+		// --- Start ----------------------------------------------------------
+		render();
+		setPaused(userPaused); // sync button state + start/stop timer
+	}
 }

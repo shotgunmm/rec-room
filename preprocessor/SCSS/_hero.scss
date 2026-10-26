@@ -1,17 +1,21 @@
 .hero-home {
 	border-top: 10px solid $navy;
+	position: relative;
 
 	@media (min-width: 768px) {
 		border-width: 30px;
 	}
 
 	.hero-slider {
+		// Fill the column's full height so the image always matches the legend
+		// beside it (the legend can run taller than the design's 580px when the
+		// event list is long). 580px is kept only as a floor for short slides.
 		@media (min-width: 768px) {
 			height: 100%;
 		}
 
 		@media (min-width: 1025px) {
-			height: 580px;
+			min-height: 580px;
 		}
 
 		img {
@@ -73,6 +77,171 @@
 	.more {
 		color: $orange;
 		font: 700 18px $pub;
+	}
+
+	// --- Banner slideshow (2+ homepage_banner rows) --------------------
+	// Slides are stacked in a single grid cell so the hero takes the height
+	// of the tallest slide and nothing below it shifts as slides change.
+	.hero-slides {
+		display: grid;
+		// Pin the single column to the container width. Without minmax(0,1fr)
+		// and min-width:0 on the items, a grid item defaults to min-width:auto
+		// and the banner image's intrinsic width blows the track past the
+		// viewport, causing horizontal page scroll on mobile.
+		grid-template-columns: minmax(0, 1fr);
+
+		> .hero-slide {
+			grid-area: 1 / 1;
+			min-width: 0;
+
+			// Make the image fill the slide where .hero-slider is height:100%
+			// (768-1024px). Below 768 the Bootstrap columns wrap onto two flex
+			// lines, so forcing row height would stretch them - leave it auto.
+			@media (min-width: 768px) {
+				> .container-fluid,
+				> .container-fluid > .row {
+					height: 100%;
+				}
+			}
+		}
+
+		// Pre-init / no-JS: show only the first slide (static banner).
+		.hero-slide:not(:first-child) {
+			opacity: 0;
+			visibility: hidden;
+		}
+
+		// JS active: crossfade. Keep the outgoing slide visible through the
+		// opacity fade (delay the visibility flip by the fade duration) and
+		// reveal the incoming slide immediately so the two actually overlap.
+		&.is-ready {
+			.hero-slide {
+				opacity: 0;
+				visibility: hidden;
+				transition: opacity 0.6s ease, visibility 0s linear 0.6s;
+			}
+
+			.hero-slide.is-active {
+				opacity: 1;
+				visibility: visible;
+				transition: opacity 0.6s ease, visibility 0s linear 0s;
+			}
+		}
+	}
+
+	.hero-controls {
+		position: absolute;
+		bottom: 1rem;
+		left: 50%;
+		z-index: 3;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.45rem 0.75rem;
+		background: rgba($navy, 0.6);
+		border-radius: 999px;
+		transform: translateX(-50%);
+	}
+
+	.hero-dots {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.hero-dot {
+		width: 10px;
+		height: 10px;
+		padding: 0;
+		border: 0;
+		border-radius: 50%;
+		background: rgba($white, 0.45);
+		cursor: pointer;
+
+		&.is-active {
+			background: $white;
+		}
+
+		&:focus-visible {
+			outline: 2px solid $white;
+			outline-offset: 2px;
+		}
+	}
+
+	.hero-pause {
+		position: relative;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border: 0;
+		border-radius: 50%;
+		background: rgba($white, 0.2);
+		cursor: pointer;
+
+		// Two bars = "pause".
+		&::before,
+		&::after {
+			content: '';
+			position: absolute;
+			top: 50%;
+			width: 3px;
+			height: 10px;
+			background: $white;
+			transform: translateY(-50%);
+		}
+
+		&::before {
+			left: 9px;
+		}
+
+		&::after {
+			right: 9px;
+		}
+
+		// Triangle = "play" (shown while paused).
+		&.is-paused {
+			&::before {
+				left: 10px;
+				width: 0;
+				height: 0;
+				background: transparent;
+				border-top: 6px solid transparent;
+				border-bottom: 6px solid transparent;
+				border-left: 9px solid $white;
+			}
+
+			&::after {
+				content: none;
+			}
+		}
+
+		&:focus-visible {
+			outline: 2px solid $white;
+			outline-offset: 2px;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.hero-slides.is-ready .hero-slide,
+		.hero-slides.is-ready .hero-slide.is-active {
+			transition: none;
+		}
+	}
+
+	// Mobile: the Bootstrap columns stack (image on top, legend below), and a
+	// shorter slide leaves empty space under its legend because the hero holds
+	// the tallest slide's height so nothing shifts on rotation. Fill that space
+	// with the legend colour, and move the controls over the image strip at the
+	// top so the pill never covers the legend text / "Learn More" link.
+	@media (max-width: 767.98px) {
+		.hero-slide {
+			background: $yellow;
+		}
+
+		.hero-controls {
+			top: 1rem;
+			bottom: auto;
+		}
 	}
 }
 

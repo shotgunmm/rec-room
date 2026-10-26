@@ -4,37 +4,44 @@
 {exp:channel:entries channel="home"}
 
 {!-- HERO SECTION with Band Schedule Sidebar --}
-{homepage_banner}
-<section class="hero hero-home">
-	<div class="container-fluid gx-0">
-		<div class="row gx-0">
-			<div class="col-md-8">
-				<div class="hero-slider">
-					{homepage_banner:image}
-					<img class="img-fluid" src="{url}" alt="{description}" />
-					{/homepage_banner:image}
+{!-- 1 banner row renders as a static hero; 2+ rows become a slideshow (see /js/hero-slider.js) --}
+{if homepage_banner}
+<section class="hero hero-home" data-hero-slider>
+	<div class="hero-slides" data-hero-slides>
+		{homepage_banner}
+		<div class="hero-slide" data-hero-slide>
+			<div class="container-fluid gx-0">
+				<div class="row gx-0">
+					<div class="col-md-8">
+						<div class="hero-slider">
+							{homepage_banner:image}
+							<img class="img-fluid" src="{url}" alt="{description}" />
+							{/homepage_banner:image}
+						</div>
+					</div>
+					<div class="col-md-4 legend p-4 p-lg-5 text-uppercase">
+						<p class="month mb-1">{exp:event_calendar:upcoming_months limit="6" single="yes" recurring="yes" status="open" category="{homepage_banner:event_category:value}" separator=" / "}</p>
+						<p class="punch mb-0"><strong class="d-block">{homepage_banner:event_category:label}</strong></p>
+						{if homepage_banner:header_note}
+						<p class="day">{homepage_banner:header_note}</p>
+						{/if}
+						{if "{homepage_banner:event_category:value}" != ""}
+							{embed="pages/calendar-list" event_category="{homepage_banner:event_category:value}"}
+						{/if}
+
+						{if homepage_banner:link_text && homepage_banner:link_url}
+						<a class="more d-inline-flex text-decoration-none" href="{homepage_banner:link_url}">
+							{homepage_banner:link_text} <i class="bi bi-chevron-right"></i>
+						</a>
+						{/if}
+					</div>
 				</div>
 			</div>
-			<div class="col-md-4 legend p-4 p-lg-5 text-uppercase">
-				<p class="month mb-1">{exp:event_calendar:upcoming_months limit="6" single="yes" recurring="yes" status="open" category="{homepage_banner:event_category:value}" separator=" / "}</p>
-				<p class="punch mb-0"><strong class="d-block">{homepage_banner:event_category:label}</strong> {homepage_banner:event_category_note}</p>
-				{if homepage_banner:header_note}
-				<p class="day">{homepage_banner:header_note}</p>
-				{/if}
-				{if "{homepage_banner:event_category:value}" != ""}
-					{embed="pages/calendar-list" event_category="{homepage_banner:event_category:value}"}
-				{/if}
-
-				{if homepage_banner:link_text && homepage_banner:link_url}
-				<a class="more d-inline-flex text-decoration-none" href="{homepage_banner:link_url}">
-					{homepage_banner:link_text} <i class="bi bi-chevron-right"></i>
-				</a>
-				{/if}
-			</div>
 		</div>
+		{/homepage_banner}
 	</div>
 </section>
-{/homepage_banner}
+{/if}
 
 {!-- PAGE CONTENT (Fluid Field Blocks) --}
 {page_content}
