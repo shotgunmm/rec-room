@@ -276,6 +276,9 @@
 		</div>
 		{!-- calendar_display: none = no calendar, single / recurring = only that type, both (or unset) = both --}
 		{if content:calendar_display == 'none'}
+		{!-- No calendar => no calendar.js/CalendarData, so the schedule's month-nav bar would be dead. Hide it at once (prevents a flash of the arrows) and remove it; the list stays static. --}
+		<style>.month-events .nav-months{display:none!important}</style>
+		<script>document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('[data-calendar-month-label]').forEach(function(l){var bar=l.parentNode;if(bar&&bar.querySelector('[data-calendar-nav-prev]')&&bar.parentNode){bar.parentNode.removeChild(bar);}});});</script>
 		{if:elseif content:calendar_display == 'single'}
 		{exp:event_calendar:display
       single="yes"
@@ -304,6 +307,9 @@
 {/page_content:calendar}
 
 {page_content:schedule}
+{!-- schedule_display: none = no list, single / recurring = only that type, both (or unset) = both. Independent of calendar_display; calendar.js reads data-calendar-list-display for month nav. limit="1": grid has one row per entry --}
+{content limit="1"}
+{if content:schedule_display != 'none'}
 <section class="month-events">
   <div class="container">
     <div class="nav-months justify-content-between mb-4 d-none d-md-flex">
@@ -314,8 +320,8 @@
     <div class="heading mb-5">
       <h2 class="text-uppercase mb-0"><strong>REC ROOM</strong> SCHEDULE</h2>
     </div>
-    <div data-calendar-event-list>
-    {exp:event_calendar:events_list single="yes" recurring="no" status="open" limit="100" var_prefix="ev" detail_url="{site_url}event-detail"}
+    <div data-calendar-event-list data-calendar-list-display="{content:schedule_display}">
+    {exp:event_calendar:events_list display="{content:schedule_display}" month_scope="yes" status="open" limit="200" var_prefix="ev" detail_url="{site_url}event-detail"}
     <div class="event-collapse{if ev:count == 1} clicked{/if}" data-event-date="{ev:date_key}">
       <div class="event-head d-flex">
         <div class="date d-flex justify-content-center align-items-center">{ev:day_num}</div>
@@ -338,6 +344,8 @@
     </div>
   </div>
 </section>
+{/if}
+{/content}
 {/page_content:schedule}
 
 {page_content:image_page_hero}

@@ -126,6 +126,20 @@
         });
     }
 
+    // The schedule list ([data-calendar-event-list]) has its OWN type filter, read from
+    // data-calendar-list-display (none|single|recurring|both; blank/unknown = both).
+    // It is independent of the grid's state.single / state.recurring.
+    function filterListEvents(events, listEl) {
+        var mode = ((listEl && listEl.getAttribute('data-calendar-list-display')) || '')
+            .toLowerCase().trim();
+        return events.filter(function (ev) {
+            if (mode === 'none') return false;
+            if (mode === 'single')    return ev.event_type === 'single';
+            if (mode === 'recurring') return ev.event_type === 'recurring';
+            return true;
+        });
+    }
+
     // -------------------------------------------------------------------------
     // Event lookup
     // -------------------------------------------------------------------------
@@ -260,7 +274,12 @@
     function renderEventList(listEl, events) {
         if (!listEl) return;
 
-        var filtered = filterEvents(events);
+        if ((listEl.getAttribute('data-calendar-list-display') || '').toLowerCase().trim() === 'none') {
+            listEl.innerHTML = '';
+            return;
+        }
+
+        var filtered = filterListEvents(events, listEl);
 
         // Sort by date_key then start_time_raw
         filtered.sort(function (a, b) {

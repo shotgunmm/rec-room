@@ -30,7 +30,7 @@ EE will create three database tables on install:
 
 ## Template Tags
 
-### `{exp:calendar:events_list}`
+### `{exp:event_calendar:events_list}`
 
 Outputs an upcoming events list. Returns no results if no future events exist.
 
@@ -39,6 +39,13 @@ Outputs an upcoming events list. Returns no results if no future events exist.
 | Parameter | Default | Description |
 |---|---|---|
 | `limit` | Site setting (default 5) | Maximum number of events to return |
+| `single` | `yes` | `yes`/`no` - include single events |
+| `recurring` | `yes` | `yes`/`no` - include recurring events (one row per definition, not per occurrence) |
+| `display` | _(unset)_ | `none`, `single`, `recurring` or `both`. Blank/unknown = both. When set, overrides `single=`/`recurring=` (`none` returns no rows). Designed to take a CMS select, e.g. `display="{content:schedule_display}"` |
+| `month_scope` | _(unset)_ | `yes` expands recurring events to every occurrence inside the filtered month (same as the calendar's month navigation), one row per occurrence. Unset: one row per recurring event at its next occurrence |
+| `status` | `open` | `open` or `any` |
+| `var_prefix` | _(none)_ | Prefix for loop variables, e.g. `var_prefix="ev"` gives `{ev:title}` |
+| `detail_url` | _(none)_ | Base URL for event detail links |
 | `date_format` | `%F %j, %Y` | EE date format string for date portion |
 | `time_format` | `%g:%i %A` | EE date format string for time portion |
 
@@ -58,18 +65,18 @@ Outputs an upcoming events list. Returns no results if no future events exist.
 **Example**
 
 ```html
-{exp:calendar:events_list limit="3"}
+{exp:event_calendar:events_list limit="3"}
     <article>
         <h2>{title}</h2>
         {description}
         <p>{start_time} &ndash; {end_time}</p>
     </article>
-{/exp:calendar:events_list}
+{/exp:event_calendar:events_list}
 ```
 
 ---
 
-### `{exp:calendar:display}`
+### `{exp:event_calendar:display}`
 
 Outputs the interactive monthly calendar. Renders a `<script>` block with `window.CalendarData` and loads `calendar.js`. Requires the following HTML structure in your template:
 
@@ -83,7 +90,7 @@ Outputs the interactive monthly calendar. Renders a `<script>` block with `windo
 **Required HTML structure**
 
 ```html
-{exp:calendar:display}
+{exp:event_calendar:display}
 
 <div data-calendar>
     <div data-calendar-month-label></div>
@@ -158,8 +165,9 @@ If manual removal is ever needed, delete the `themes/user/calendar/` directory y
 
 - **Recurring event dates** — a recurring event that started more than one year ago is treated as starting one year back, so calendar months older than a year show no recurring events. Recurring events saved before start dates existed (shown without a "From" date in the CP) work the same way; open one in the CP to give it a real start date.
 
+- **Schedule list month navigation** — the `[data-calendar-event-list]` list can carry `data-calendar-list-display="none|single|recurring|both"`, which `calendar.js` uses to filter the list on month navigation independently of the calendar grid's `single=`/`recurring=`. Month navigation needs the calendar `display` tag on the page; when the calendar is hidden (`calendar_display='none'`) the Rec Room template removes the schedule's prev/next bar and the list stays static.
 - **Recurring events and `{exp:event_calendar:events_list}`** — recurring events return one row per event, not one per occurrence. Events whose start date is in the future, or whose end date has passed, are not listed. Recurring rows are listed first, ordered by time of day.
 
-- **`limit=` cache key** — the `{exp:calendar:events_list}` tag caches results using the limit value as part of the cache key (`calendar_events_list_{site_id}_{limit}`). If you use `limit=` to override the site default, that cache key is not automatically busted when events are created, edited, or deleted. Only the key matching the site setting default is busted. If you rely on a custom `limit=` value, you may see stale results for up to 1 hour.
+- **`limit=` cache key** — the `{exp:event_calendar:events_list}` tag caches results using the limit value as part of the cache key (`calendar_events_list_{site_id}_{limit}`). If you use `limit=` to override the site default, that cache key is not automatically busted when events are created, edited, or deleted. Only the key matching the site setting default is busted. If you rely on a custom `limit=` value, you may see stale results for up to 1 hour.
 
 - **1-hour cache staleness** — all caches have a 1-hour TTL. Events created or modified in the CP will appear on the front end within 1 hour, or immediately after the cache expires naturally.
