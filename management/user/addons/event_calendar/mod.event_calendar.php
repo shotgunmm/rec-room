@@ -52,7 +52,6 @@ class Event_calendar
         // next occurrence. Default (unset) behaviour is unchanged.
         $month_scope = strtolower(trim((string) ee()->TMPL->fetch_param('month_scope', ''))) === 'yes';
         $now        = ee()->localize->now;
-        $far_future = strtotime('+5 years', $now);
 
         try {
             $settings_row_list = ee()->db->select('url_style')->where('site_id', $site_id)
@@ -69,12 +68,16 @@ class Event_calendar
             !preg_match('/^(\d{4})-(\d{2})$/', $month_param, $mp) ||
             (int) $mp[2] < 1 || (int) $mp[2] > 12
         ) {
-            $filter_year  = (int) date('Y', $now);
-            $filter_month = (int) date('n', $now);
+            $filter_year  = (int) ee()->localize->format_date('%Y', $now);
+            $filter_month = (int) ee()->localize->format_date('%n', $now);
         } else {
             $filter_year  = (int) $mp[1];
             $filter_month = (int) $mp[2];
         }
+        // Whether the resolved filter month is the current month or later. Guards the past-event
+        // drop below from emptying an explicitly requested past ("archive") month.
+        $filter_not_past = ($filter_year * 12 + $filter_month)
+            >= ((int) ee()->localize->format_date('%Y', $now) * 12 + (int) ee()->localize->format_date('%n', $now));
 
         // Optional category filter: pipe-separated cat_url_title values
         $category_param = ee()->TMPL->fetch_param('category', '');
@@ -99,7 +102,7 @@ class Event_calendar
             sprintf('%04d-%02d-%02d 23:59:59', $filter_year, $filter_month, (int) date('t', $scope_start))
         );
 
-        ee()->db->select('id, title, slug, short_description, url, banner_image, start_time, end_time, rrule,
+        ee()->db->select('id, title, slug, short_description, start_time, end_time, rrule,
                           recurrence_end, status,
                           IF(rrule IS NULL, "single", "recurring") AS event_type', FALSE)
                 ->where('site_id', $site_id);
@@ -118,6 +121,10 @@ class Event_calendar
 
         $results = [];
         $expander = new RecurrenceExpander();
+        // Today in the site timezone. Events are kept through the end of their calendar day, so
+        // recurring and single rows drop consistently (one that ended earlier today still shows
+        // until midnight) rather than the moment end_time passes.
+        $today_key = ee()->localize->format_date('%Y-%m-%d', ee()->localize->now);
 
         foreach ($rows as $row) {
             $is_recurring = $row['rrule'] !== null && $row['rrule'] !== '';
@@ -136,32 +143,53 @@ class Event_calendar
             } elseif ($is_recurring) {
                 if ($recurring !== 'yes') continue;
                 if ($status !== 'any') {
-                    // Not started yet (compare against the start of the start day) or already ended
-                    $start_ts = (int) $row['start_time'];
-                    $start_day = mktime(0, 0, 0, (int) date('n', $start_ts), (int) date('j', $start_ts), (int) date('Y', $start_ts));
-                    if ($start_day > ee()->localize->now) continue;
+                    // Not started yet (compare local calendar days) or already ended.
+                    if (ee()->localize->format_date('%Y-%m-%d', (int) $row['start_time']) > $today_key) continue;
                     if (!empty($row['recurrence_end']) && (int) $row['recurrence_end'] < ee()->localize->now) continue;
                 }
+                // Resolve the next occurrence now so this row can be ordered chronologically
+                // against single events — the stored start_time is only the series anchor
+                // (1970 for legacy events), not the next date actually shown.
+                $next_occ = $expander->representativeOccurrence($row['rrule'], (int) $row['start_time'], ee()->localize->now);
+                // No resolvable occurrence (ended/invalid series) — skip rather than fall back to
+                // the 1970 series anchor, which would sort first under order="date" and show Jan 1970.
+                if ($next_occ === null) continue;
+                $row['_occ_start'] = $next_occ;
+                $row['_occ_end']   = $next_occ + ((int) $row['end_time'] - (int) $row['start_time']);
                 $results[] = $row;
             } else {
                 if ($single !== 'yes') continue;
-                $ev_year  = (int) date('Y', (int) $row['start_time']);
-                $ev_month = (int) date('n', (int) $row['start_time']);
+                $ev_year  = (int) ee()->localize->format_date('%Y', (int) $row['start_time']);
+                $ev_month = (int) ee()->localize->format_date('%n', (int) $row['start_time']);
                 if ($ev_year !== $filter_year || $ev_month !== $filter_month) continue;
+                // Default (banner) path: drop single events that have already ended, so the
+                // upcoming-events list never leads with a past date. The month-scope calendar
+                // intentionally shows the whole displayed month, and an explicitly requested past
+                // month ($filter_not_past === false) is left intact. Compared by calendar day so a
+                // single that ended earlier today still shows until midnight, consistent with how
+                // recurring events are kept for the whole current day.
+                if (!$month_scope && $status !== 'any' && $filter_not_past
+                    && ee()->localize->format_date('%Y-%m-%d', (int) $row['end_time']) < $today_key) continue;
                 $results[] = $row;
             }
         }
 
-        // Recurring events first, ordered by time of day (their dates are just start dates), then
-        // single events by date.
-        $sort_key = fn(array $r) => !empty($r['rrule'])
-            ? [0, (int) date('G', (int) $r['start_time']) * 3600 + (int) date('i', (int) $r['start_time']) * 60]
-            : [1, (int) $r['start_time']];
-        if ($month_scope) {
-            // Chronological, matching calendar.js renderEventList (date, then start time).
+        // order="date" (and the month-scope path) sort chronologically by the actual
+        // occurrence date — matching calendar.js renderEventList (date, then start time). A
+        // recurring row's stored start_time is only the series anchor (1970 for legacy events),
+        // so its resolved next occurrence (_occ_start, set above for both paths) is used when
+        // present. Default (unset) keeps the legacy order: recurring events first by their
+        // stored time of day, then single events by date — so the weekday-labeled circle list
+        // in pages.group/index.html is unaffected. Only order="date" is recognized; any other
+        // value (or unset) uses the legacy order.
+        $order_param = strtolower(trim((string) ee()->TMPL->fetch_param('order', '')));
+        if ($month_scope || $order_param === 'date') {
             $occ_start_of = fn(array $r) => isset($r['_occ_start']) ? (int) $r['_occ_start'] : (int) $r['start_time'];
             usort($results, fn($a, $b) => [$occ_start_of($a), (int) $a['id']] <=> [$occ_start_of($b), (int) $b['id']]);
         } else {
+            $sort_key = fn(array $r) => !empty($r['rrule'])
+                ? [0, (int) date('G', (int) $r['start_time']) * 3600 + (int) date('i', (int) $r['start_time']) * 60]
+                : [1, (int) $r['start_time']];
             usort($results, fn($a, $b) => $sort_key($a) <=> $sort_key($b));
         }
         $results = array_slice($results, 0, $limit);
@@ -178,6 +206,7 @@ class Event_calendar
                 ->select('ec.event_id, c.cat_id, c.cat_name, c.cat_url_title', FALSE)
                 ->from('exp_calendar_event_categories ec')
                 ->join('exp_categories c', 'c.cat_id = ec.cat_id', 'inner')
+                ->where('c.site_id', $site_id)
                 ->where_in('ec.event_id', $result_event_ids)
                 ->order_by('c.cat_order', 'ASC')
                 ->get()
@@ -186,7 +215,7 @@ class Event_calendar
                 $cat_map[(int) $r['event_id']][] = [
                     'cat_id'        => (int) $r['cat_id'],
                     'cat_name'      => htmlspecialchars($r['cat_name']),
-                    'cat_url_title' => $r['cat_url_title'],
+                    'cat_url_title' => htmlspecialchars($r['cat_url_title']),
                 ];
             }
         }
@@ -197,20 +226,17 @@ class Event_calendar
             $end_ts     = (int) $event['end_time'];
             // A recurring row's stored start is only the first day of the series (1970 for legacy
             // events), so its date fields, times and detail link describe the next occurrence.
+            // Every recurring row that reaches here has its occurrence resolved (_occ_start set in
+            // both the month-scope and default paths); single events use their stored start_time.
             if (isset($event['_occ_start'])) {
                 $start_ts = (int) $event['_occ_start'];
                 $end_ts   = (int) $event['_occ_end'];
-            } elseif (!empty($event['rrule'])) {
-                $next_occ = $expander->representativeOccurrence($event['rrule'], $start_ts, ee()->localize->now);
-                if ($next_occ !== null) {
-                    $end_ts   = $next_occ + ($end_ts - $start_ts);
-                    $start_ts = $next_occ;
-                }
             }
-            $day_n      = (int) date('j', $start_ts);
+            $day_n      = (int) ee()->localize->format_date('%j', $start_ts);
             $ord_sfx    = in_array($day_n % 100, [11, 12, 13]) ? 'th'
                         : (['st', 'nd', 'rd'][$day_n % 10 - 1] ?? 'th');
-            $date_line  = date('l', $start_ts) . ', ' . date('F', $start_ts) . ' ' . $day_n . $ord_sfx
+            $date_line  = ee()->localize->format_date('%l', $start_ts) . ', '
+                        . ee()->localize->format_date('%F', $start_ts) . ' ' . $day_n . $ord_sfx
                         . ', ' . ee()->localize->format_date('%g:%i %A', $start_ts)
                         . ' – '  . ee()->localize->format_date('%g:%i %A', $end_ts);
 
@@ -220,12 +246,10 @@ class Event_calendar
 
             $is_recurring_ev = !empty($event['rrule']);
 
-            // A recurring event's weekday comes from its rule; start_time's weekday is only the
-            // start date and need not match.
-            $dow_n = (int) date('w', $start_ts);
-            if ($is_recurring_ev && preg_match('/BYDAY=([A-Z]{2})/', (string) $event['rrule'], $bd)) {
-                $dow_n = ['SU' => 0, 'MO' => 1, 'TU' => 2, 'WE' => 3, 'TH' => 4, 'FR' => 5, 'SA' => 6][$bd[1]] ?? $dow_n;
-            }
+            // $start_ts is the resolved occurrence (for recurring events too), so its weekday is
+            // correct directly — no need to derive it from the rule's BYDAY, which also can't
+            // represent a multi-day rule such as BYDAY=TU,TH.
+            $dow_n = (int) ee()->localize->format_date('%w', $start_ts);
             $day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
             $event_url = '';
@@ -234,7 +258,7 @@ class Event_calendar
                     ? $detail_url . '/index/' . $event['slug']
                     : $detail_url . '/' . $event['slug'];
                 if ($is_recurring_ev) {
-                    $event_url .= '/' . date('Y-m-d', $start_ts);
+                    $event_url .= '/' . ee()->localize->format_date('%Y-%m-%d', $start_ts);
                 }
             }
 
@@ -244,7 +268,7 @@ class Event_calendar
                 'title'           => htmlspecialchars($event['title']),
                 'slug'            => htmlspecialchars($event['slug']),
                 'short_description' => $short_description,
-                'date_key'        => date('Y-m-d', $start_ts),
+                'date_key'        => ee()->localize->format_date('%Y-%m-%d', $start_ts),
                 'day_num'         => $day_n,
                 'date_line'       => htmlspecialchars($date_line),
                 'start_time'      => $start_ts,
@@ -320,6 +344,9 @@ class Event_calendar
         $rows     = ee()->db->order_by('start_time', 'ASC')->get('exp_calendar_events')->result_array();
         $expander = new RecurrenceExpander();
         $starts   = [];
+        // Keep a single event through the end of its calendar day, matching events_list, so the
+        // month legend never omits a month whose event the list still shows that evening.
+        $today_key = ee()->localize->format_date('%Y-%m-%d', $now);
 
         foreach ($rows as $row) {
             $is_recurring = $row['rrule'] !== null && $row['rrule'] !== '';
@@ -339,7 +366,7 @@ class Event_calendar
                 }
             } else {
                 if ($single !== 'yes') continue;
-                if ((int) $row['start_time'] < $now) continue;
+                if (ee()->localize->format_date('%Y-%m-%d', (int) $row['end_time']) < $today_key) continue;
                 $starts[] = (int) $row['start_time'];
             }
         }
@@ -353,9 +380,9 @@ class Event_calendar
 
         $months = [];
         foreach ($starts as $ts) {
-            $key = date('n', $ts);
+            $key = (int) ee()->localize->format_date('%n', $ts);
             if (!isset($months[$key])) {
-                $months[$key] = strtoupper(date('F', $ts));
+                $months[$key] = strtoupper(ee()->localize->format_date('%F', $ts));
             }
         }
 
