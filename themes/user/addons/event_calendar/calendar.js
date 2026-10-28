@@ -129,13 +129,23 @@
     // The schedule list ([data-calendar-event-list]) has its OWN type filter, read from
     // data-calendar-list-display (none|single|recurring|both; blank/unknown = both).
     // It is independent of the grid's state.single / state.recurring.
+    // Also filters by category when data-calendar-list-categories is present (comma-separated
+    // category names, matching the event's categories[] from the AJAX payload). Blank = all.
     function filterListEvents(events, listEl) {
         var mode = ((listEl && listEl.getAttribute('data-calendar-list-display')) || '')
             .toLowerCase().trim();
+        var catAttr = ((listEl && listEl.getAttribute('data-calendar-list-categories')) || '').trim();
+        var cats = catAttr
+            ? catAttr.split(',').map(function (c) { return c.trim().toLowerCase(); }).filter(Boolean)
+            : [];
         return events.filter(function (ev) {
             if (mode === 'none') return false;
-            if (mode === 'single')    return ev.event_type === 'single';
-            if (mode === 'recurring') return ev.event_type === 'recurring';
+            if (mode === 'single'    && ev.event_type !== 'single')    return false;
+            if (mode === 'recurring' && ev.event_type !== 'recurring') return false;
+            if (cats.length) {
+                var evCats = (ev.categories || []).map(function (c) { return String(c).toLowerCase(); });
+                if (!evCats.some(function (c) { return cats.indexOf(c) !== -1; })) return false;
+            }
             return true;
         });
     }

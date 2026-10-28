@@ -79,19 +79,29 @@ class Event_calendar
         $filter_not_past = ($filter_year * 12 + $filter_month)
             >= ((int) ee()->localize->format_date('%Y', $now) * 12 + (int) ee()->localize->format_date('%n', $now));
 
-        // Optional category filter: pipe-separated cat_url_title values
+        // Optional category filter: tokens separated by "|" or "," — each matched against
+        // cat_url_title OR cat_name, so it accepts a url_title list (e.g. the homepage banner)
+        // or an EE multi_select field's label output (e.g. the schedule "events_displayed" field).
         $category_param = ee()->TMPL->fetch_param('category', '');
         $filter_cat_ids = [];
         if ($category_param !== '' && $category_param !== FALSE) {
-            $url_titles = array_filter(array_map('trim', explode('|', $category_param)));
-            if (!empty($url_titles)) {
-                $cat_rows = ee()->db
-                    ->select('cat_id')
-                    ->where('site_id', $site_id)
-                    ->where_in('cat_url_title', $url_titles)
-                    ->get('categories')
-                    ->result_array();
-                $filter_cat_ids = array_map(fn($r) => (int) $r['cat_id'], $cat_rows);
+            $tokens = array_filter(array_map('trim', preg_split('/[|,]/', (string) $category_param)));
+            if (!empty($tokens)) {
+                // Match url_title OR name — two queries merged (the EE query builder here has no
+                // group_start for a grouped OR).
+                $by_url = ee()->db->select('cat_id')->where('site_id', $site_id)
+                    ->where_in('cat_url_title', $tokens)->get('categories')->result_array();
+                $by_name = ee()->db->select('cat_id')->where('site_id', $site_id)
+                    ->where_in('cat_name', $tokens)->get('categories')->result_array();
+                $filter_cat_ids = array_values(array_unique(array_merge(
+                    array_map(fn($r) => (int) $r['cat_id'], $by_url),
+                    array_map(fn($r) => (int) $r['cat_id'], $by_name)
+                )));
+                // A category filter that resolves to nothing must return nothing, not fall open
+                // to every event.
+                if (empty($filter_cat_ids)) {
+                    return ee()->TMPL->no_results();
+                }
             }
         }
 
@@ -326,6 +336,10 @@ class Event_calendar
                     ->get('categories')
                     ->result_array();
                 $filter_cat_ids = array_map(fn($r) => (int) $r['cat_id'], $cat_rows);
+                // Requested a category that matches nothing → return nothing, don't fall open.
+                if (empty($filter_cat_ids)) {
+                    return '';
+                }
             }
         }
 
@@ -751,7 +765,9 @@ class Event_calendar
 
         ee()->load->library('typography');
 
-        $cache_key = 'event_calendar/ajax_events/' . $site_id . '/' . $month;
+        // v2: payload now carries per-event `categories`. The version busts any old-shape entries
+        // cached before this change (JS would otherwise drop every event on month nav).
+        $cache_key = 'event_calendar/ajax_events/v2/' . $site_id . '/' . $month;
         $cached    = ee()->cache->get($cache_key, Cache::LOCAL_SCOPE);
         if ($cached !== FALSE) {
             $this->_send_json($cached);
@@ -803,6 +819,22 @@ class Event_calendar
         $expander = new RecurrenceExpander();
         $events   = [];
 
+        // Category names per event, so the schedule list can be filtered by category client-side
+        // (the cache is a superset of all open events — JS filters it).
+        $cat_map = [];
+        $ev_ids  = array_map(fn($r) => (int) $r['id'], $rows);
+        if (!empty($ev_ids)) {
+            $cat_rows = ee()->db->select('ec.event_id, c.cat_name', FALSE)
+                ->from('exp_calendar_event_categories ec')
+                ->join('exp_categories c', 'c.cat_id = ec.cat_id', 'inner')
+                ->where('c.site_id', $site_id)
+                ->where_in('ec.event_id', $ev_ids)
+                ->get()->result_array();
+            foreach ($cat_rows as $cr) {
+                $cat_map[(int) $cr['event_id']][] = $cr['cat_name'];
+            }
+        }
+
         foreach ($rows as $row) {
             $is_recurring = $row['rrule'] !== null && $row['rrule'] !== '';
 
@@ -833,6 +865,7 @@ class Event_calendar
                         'date_key'       => ee()->localize->format_date('%Y-%m-%d', $occ_start),
                         'event_type'     => 'recurring',
                         'day_of_week'    => (int) date('w', $occ_start),
+                        'categories'     => $cat_map[(int) $row['id']] ?? [],
                     ];
                 }
             } else {
@@ -850,6 +883,7 @@ class Event_calendar
                     'end_time_raw'   => (int) $row['end_time'],
                     'date_key'       => ee()->localize->format_date('%Y-%m-%d', $row['start_time']),
                     'event_type'     => 'single',
+                    'categories'     => $cat_map[(int) $row['id']] ?? [],
                 ];
             }
         }

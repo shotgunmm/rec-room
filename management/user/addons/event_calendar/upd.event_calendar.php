@@ -174,7 +174,7 @@ class Event_calendar_upd
         ];
         foreach ($months as $m) {
             ee()->cache->delete(
-                'event_calendar/ajax_events/' . $site_id . '/' . $m,
+                'event_calendar/ajax_events/v2/' . $site_id . '/' . $m,
                 Cache::LOCAL_SCOPE
             );
         }

@@ -307,9 +307,9 @@
 {/page_content:calendar}
 
 {page_content:schedule}
-{!-- schedule_display: none = no list, single / recurring = only that type, both (or unset) = both. Independent of calendar_display; calendar.js reads data-calendar-list-display for month nav. limit="1": grid has one row per entry --}
+{!-- schedule_display (type: none/single/recurring/both) and events_displayed (category multi-select) both filter the list. Section hides when type is none OR no categories are selected. calendar.js reads data-calendar-list-display + data-calendar-list-categories for month nav. limit="1": grid has one row per entry --}
 {content limit="1"}
-{if content:schedule_display != 'none'}
+{if content:schedule_display != 'none' && content:events_displayed}
 <section class="month-events">
   <div class="container">
     <div class="nav-months justify-content-between mb-4 d-none d-md-flex">
@@ -320,8 +320,8 @@
     <div class="heading mb-5">
       <h2 class="text-uppercase mb-0"><strong>REC ROOM</strong> SCHEDULE</h2>
     </div>
-    <div data-calendar-event-list data-calendar-list-display="{content:schedule_display}">
-    {exp:event_calendar:events_list display="{content:schedule_display}" month_scope="yes" status="open" limit="200" var_prefix="ev" detail_url="{site_url}event-detail"}
+    <div data-calendar-event-list data-calendar-list-display="{content:schedule_display}" data-calendar-list-categories="{content:events_displayed}">
+    {exp:event_calendar:events_list display="{content:schedule_display}" category="{content:events_displayed}" month_scope="yes" status="open" limit="200" var_prefix="ev" detail_url="{site_url}event-detail"}
     <div class="event-collapse{if ev:count == 1} clicked{/if}" data-event-date="{ev:date_key}">
       <div class="event-head d-flex">
         <div class="date d-flex justify-content-center align-items-center">{ev:day_num}</div>
