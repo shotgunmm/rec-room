@@ -51,6 +51,14 @@ class Event_calendar
         // filtered month (same expansion as the AJAX month-nav), instead of one row at the
         // next occurrence. Default (unset) behaviour is unchanged.
         $month_scope = strtolower(trim((string) ee()->TMPL->fetch_param('month_scope', ''))) === 'yes';
+        // Opt-in upcoming="yes": ignore the current-month restriction and list the next upcoming
+        // events across months (singles dated today or later; recurring series that start in the
+        // future resolve to their first occurrence). Ignored when an explicit month= is given.
+        // Default (unset) behaviour is unchanged.
+        $upcoming   = strtolower(trim((string) ee()->TMPL->fetch_param('upcoming', ''))) === 'yes';
+        if ($month_scope) {
+            $upcoming = false; // month_scope wins; the two are mutually exclusive
+        }
         $now        = ee()->localize->now;
 
         try {
@@ -71,6 +79,7 @@ class Event_calendar
             $filter_year  = (int) ee()->localize->format_date('%Y', $now);
             $filter_month = (int) ee()->localize->format_date('%n', $now);
         } else {
+            $upcoming     = false; // explicit month= wins
             $filter_year  = (int) $mp[1];
             $filter_month = (int) $mp[2];
         }
@@ -154,7 +163,8 @@ class Event_calendar
                 if ($recurring !== 'yes') continue;
                 if ($status !== 'any') {
                     // Not started yet (compare local calendar days) or already ended.
-                    if (ee()->localize->format_date('%Y-%m-%d', (int) $row['start_time']) > $today_key) continue;
+                    // upcoming="yes" keeps not-yet-started series (resolved to their first occurrence below).
+                    if (!$upcoming && ee()->localize->format_date('%Y-%m-%d', (int) $row['start_time']) > $today_key) continue;
                     if (!empty($row['recurrence_end']) && (int) $row['recurrence_end'] < ee()->localize->now) continue;
                 }
                 // Resolve the next occurrence now so this row can be ordered chronologically
@@ -171,14 +181,14 @@ class Event_calendar
                 if ($single !== 'yes') continue;
                 $ev_year  = (int) ee()->localize->format_date('%Y', (int) $row['start_time']);
                 $ev_month = (int) ee()->localize->format_date('%n', (int) $row['start_time']);
-                if ($ev_year !== $filter_year || $ev_month !== $filter_month) continue;
+                if (!$upcoming && ($ev_year !== $filter_year || $ev_month !== $filter_month)) continue;
                 // Default (banner) path: drop single events that have already ended, so the
                 // upcoming-events list never leads with a past date. The month-scope calendar
                 // intentionally shows the whole displayed month, and an explicitly requested past
                 // month ($filter_not_past === false) is left intact. Compared by calendar day so a
                 // single that ended earlier today still shows until midnight, consistent with how
                 // recurring events are kept for the whole current day.
-                if (!$month_scope && $status !== 'any' && $filter_not_past
+                if (!$month_scope && $status !== 'any' && ($filter_not_past || $upcoming)
                     && ee()->localize->format_date('%Y-%m-%d', (int) $row['end_time']) < $today_key) continue;
                 $results[] = $row;
             }

@@ -27,7 +27,7 @@
 						{/if}
 						{if "{homepage_banner:event_category:value}" != ""}
 							{!-- Weekly Deals shows stars in the legacy (stable) order; other categories show dates in chronological order. --}
-							{embed="pages/calendar-list" event_category="{homepage_banner:event_category:value}" list_order="{if "{homepage_banner:event_category:value}" == "weekly-deals"}{if:else}date{/if}"}
+							{embed="pages/calendar-list" upcoming="{if "{homepage_banner:event_category:value}" == "weekly-deals"}{if:else}yes{/if}" event_category="{homepage_banner:event_category:value}" list_order="{if "{homepage_banner:event_category:value}" == "weekly-deals"}{if:else}date{/if}"}
 						{/if}
 
 						{if homepage_banner:link_text && homepage_banner:link_url}

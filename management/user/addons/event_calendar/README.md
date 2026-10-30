@@ -43,6 +43,7 @@ Outputs an upcoming events list. Returns no results if no future events exist.
 | `recurring` | `yes` | `yes`/`no` - include recurring events (one row per definition, not per occurrence) |
 | `display` | _(unset)_ | `none`, `single`, `recurring` or `both`. Blank/unknown = both. When set, overrides `single=`/`recurring=` (`none` returns no rows). Designed to take a CMS select, e.g. `display="{content:schedule_display}"` |
 | `month_scope` | _(unset)_ | `yes` expands recurring events to every occurrence inside the filtered month (same as the calendar's month navigation), one row per occurrence. Unset: one row per recurring event at its next occurrence |
+| `upcoming` | _(unset)_ | `yes` ignores the current-month restriction and lists the next upcoming events across months: single events dated today or later, and recurring series that have not started yet resolved to their first occurrence. An explicit valid `month=` overrides it. Mutually exclusive with `month_scope` (`month_scope` wins). Unset: current month only |
 | `order` | _(unset)_ | `date` sorts rows chronologically by occurrence date, then start time. Only the literal value `date` is recognised — unset (or any other value) uses the legacy order: recurring events first by their stored time of day, then single events by date. The `month_scope` path is always chronological regardless of this parameter |
 | `status` | `open` | `open` or `any` |
 | `var_prefix` | _(none)_ | Prefix for loop variables, e.g. `var_prefix="ev"` gives `{ev:title}` |
