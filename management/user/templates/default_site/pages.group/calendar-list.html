@@ -7,12 +7,13 @@
     order="{embed:list_order}"
     upcoming="{embed:upcoming}"
     category="{embed:event_category}"
+    detail_url="{site_url}event-detail"
   }
     <div class="on-day d-flex align-items-center">
-      <div class="num d-flex align-items-center justify-content-center">
-        {if "{embed:event_category}" == "weekly-deals"}<img src="/images/yellow-star.svg" alt="*" />{if:else}{day_num}{/if}
+      <div class="num d-flex flex-column align-items-center justify-content-center">
+        {if "{embed:event_category}" == "weekly-deals"}<img src="/images/yellow-star.svg" alt="*" />{if:else}<span class="mo">{start_time format="%M"}</span><span class="dy">{start_time format="%d"}</span>{/if}
       </div>
-      <div class="name">{title}</div>
+      <div class="name">{if event_url}<a class="text-reset text-decoration-none" href="{event_url}">{title}</a>{if:else}{title}{/if}</div>
     </div>
   {/exp:event_calendar:events_list}
 </div>
